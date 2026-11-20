@@ -1,0 +1,73 @@
+
+## 웹 검색 (기본값)
+- HTTP 200, 2.50초, 응답 키: ['requestId', 'results', 'totalCount']
+  - [encykorea.aks.ac.kr] 천상열차분야지도 각석 - 한국민족문화대백과사전 - 한국학중앙연구원 | date=None | 설명 92자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [ko.wikipedia.org] 천상열차분야지도 | date=None | 설명 61자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [m.blog.naver.com] 세계 최초의 전천 천문도, 천상열차분야지도를 만나다! - 네이버 블로그 | date=2024-06-08 | 설명 95자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [contents.history.go.kr] 천상열차분야지도 1395 - 우리역사넷 | date=None | 설명 94자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [youtube.com] Joseon Already Knew It 600 Years Ago... The Amazin …(75자) | date=None | 설명 81자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - 첫 결과 설명: 천상열차분야지도 각석은 1395년(태조 4)에 권근 등 12명의 천문학자들이 만든 현존하는 우리나라 최고의 석각천문도이다. 세계에서 두 번째로 오래된 석각천문도이다.
+  - knowledge 키 없음
+
+## 웹 검색 (include_knowledge=false)
+- HTTP 200, 2.30초, 응답 키: ['requestId', 'results', 'totalCount']
+  - [encykorea.aks.ac.kr] 천상열차분야지도 각석 - 한국민족문화대백과사전 - 한국학중앙연구원 | date=None | 설명 92자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [ko.wikipedia.org] 천상열차분야지도 | date=None | 설명 61자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [m.blog.naver.com] 세계 최초의 전천 천문도, 천상열차분야지도를 만나다! - 네이버 블로그 | date=2024-06-08 | 설명 95자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [contents.history.go.kr] 천상열차분야지도 1395 - 우리역사넷 | date=None | 설명 94자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [youtube.com] Joseon Already Knew It 600 Years Ago... The Amazin …(75자) | date=None | 설명 81자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - 첫 결과 설명: 천상열차분야지도 각석은 1395년(태조 4)에 권근 등 12명의 천문학자들이 만든 현존하는 우리나라 최고의 석각천문도이다. 세계에서 두 번째로 오래된 석각천문도이다.
+  - knowledge 키 없음
+
+## 웹 검색 (통계 질의, 기본값)
+- HTTP 200, 2.95초, 응답 키: ['requestId', 'results', 'totalCount']
+  - [cha.go.kr] 2025년 자연유산(명승) 지정 현황행정자료 상세 | date=2025-07-08 | 설명 85자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [khs.go.kr] 자연유산(명승) 지정 현황행정자료 상세 | date=2024-07-24 | 설명 102자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [index.go.kr] 국가지정유산 현황 | date=None | 설명 75자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [nrich.go.kr] 자연유산(천연기념물, 명승) 지정 현황(24.2월 기준) | date=None | 설명 80자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - [heritage.go.kr] 국가유산포털 | 국가유산 검색 | date=None | 설명 88자 | 필드 ['date', 'description', 'faviconUrl', 'hostname', 'title', 'url']
+  - 첫 결과 설명: 자연유산(명승) 지정 현황(2025.6.30.기준)을 붙임과 같이 공개합니다. ... 공공누리 제 4유형, 출처표시, 상업용금지, 변경금지에 해당합니다.
+  - knowledge 키 없음
+
+## 학술 검색
+- HTTP 200, 0.36초, 응답 키: ['requestId', 'results', 'totalCount']
+  - [scholar.kyobobook.co.kr] 천상열차분야지도 동방7수의 복원 | 인문논총 | 인용 0 | 저자 ["정연식", "YeonsikChung"] | date=2015-02-01
+  - [kiss.kstudy.com] 초등학교 과학 교육에서 활용하는 암석 표본의 문제점과 개선 방안 | 한국지구과학회지 | 인용 0 | 저자 ["권윤경", "김정률"] | date=2012-01-01
+  - [dspace.kci.go.kr] 손상 진행에 따른 석모도 암석 시험편의 탄성파속도 변화 | 지구물리와 물리탐사 | 인용 0 | 저자 ["이상규", "최지향", "천대성", "이태종"] | date=2011-11-01
+  - [dbpia.co.kr] 화강암의 손상과정에 따른 투수계수 특성 연구 | 지질공학 | 인용 0 | 저자 ["정교철", "채병곤", "김만일", "서용석"] | date=2001-12-01
+  - [kiss.kstudy.com] 키르기스스탄 Dead Lakes 암석 애벌런치의 운동 특성과 편년 | 한국지리학회지 | 인용 0 | 저자 ["오정식", "성영배", "알렉산더스트롬", "유병용"] | date=2018-01-01
+
+## 모델 호출 (chat/completions)
+- 인증 방식 bearer: HTTP 200, 1.50초
+  - 응답 모델: claude-haiku-5.5 | usage: {"prompt_tokens": 40, "completion_tokens": 26, "total_tokens": 66, "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0, "cache_write_tokens_details": {"ttl_5m_tokens": 0, "ttl_1h_tokens": 0, "ttl_30m_tokens": 0}}, "completion_tokens_details": {"reasoning_tokens": 0}} | 내용: 조선의 첫 번째 임금은 태조 이성계입니다.
+- 인증 방식 x-api-key: HTTP 200, 1.14초
+  - 응답 모델: claude-haiku-5.5 | usage: {"prompt_tokens": 40, "completion_tokens": 26, "total_tokens": 66, "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0, "cache_write_tokens_details": {"ttl_5m_tokens": 0, "ttl_1h_tokens": 0, "ttl_30m_tokens": 0}}, "completion_tokens_details": {"reasoning_tokens": 0}} | 내용: 조선의 첫 번째 임금은 태조 이성계입니다.
+
+## 라우터와 라우팅 전략
+- liner-claude-router: 응답 모델 claude-sonnet-5.5, 2.69초, 입력 101·출력 202 토큰
+- liner-claude-router-1.0 (cost): 응답 모델 claude-haiku-5.5, 2.20초, 입력 101·출력 300 토큰
+- liner-claude-router-1.0 (balanced): 응답 모델 claude-sonnet-5.5, 2.90초, 입력 101·출력 285 토큰
+- liner-claude-router-1.0 (quality): 응답 모델 claude-sonnet-5.5, 2.81초, 입력 101·출력 284 토큰
+- liner-gpt-router: 응답 모델 gpt-6.1-terra, 3.63초, 입력 64·출력 58 토큰
+- liner-gemini-router: 응답 모델 gemini-3.5-flash-lite, 1.52초, 입력 56·출력 110 토큰
+- liner-mark: 응답 모델 liner-mark-1.3, 1.57초, 입력 64·출력 58 토큰
+
+## 구조화 출력
+- json_schema: HTTP 200, 2.57초, 유효한 JSON, 명제 2개 | {"claims":[{"text":"창덕궁은 1405년에 지어졌다.","type":"연대"},{"text":"창덕궁은 1997년 유네스코 세계유산에 등재되었다.","type":"연대"}]}
+- json_object: HTTP 200, 1.69초, JSON 파싱 실패 | ```json
+{
+  "claims": [
+    {
+      "text": "창덕궁은 1405년에 지어졌다.",
+      "type": "연대"
+    },
+    {
+      "text": "창덕궁은 1997년 유네스코 세계유산에 등재되었다.",
+      "type": "지정"
+    }
+  ]
+}
+```
+
+## 도구 호출
+- HTTP 200, 2.41초, 응답 모델 claude-sonnet-5.5, 도구 호출 1건: [{"arguments": "{\"query\": \"\\ucc3d\\ub355\\uad81 \\uc720\\ub124\\uc2a4\\ucf54 \\uc138\\uacc4\\uc720\\uc0b0 \\ub4f1\\uc7ac \\uc5f0\\ub3c4\"}", "name": "search_web"}] | finish_reason=tool_calls

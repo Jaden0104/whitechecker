@@ -1,0 +1,202 @@
+{
+  "id": "culture-ko",
+  "name": "문화·교양 기본 기준",
+  "version": "0.1",
+  "updated": "2026-11-20",
+  "about": "문화유산, 박물관, 전시·행사 안내처럼 문화·교양 분야의 글을 발행 전에 확인할 때 쓰는 기준이다. 공개된 팩트체크 원칙과 작성자의 편집 경험을 바탕으로 2026년 11월에 새로 썼다. 이 파일을 바꿔 끼우면 코드를 고치지 않고 다른 기준으로 동작한다.",
+  "references": [
+    {
+      "name": "IFCN 원칙 강령의 약속(The commitments of the Code of Principles)",
+      "publisher": "International Fact-Checking Network, Poynter Institute",
+      "url": "https://ifcncodeofprinciples.poynter.org/the-commitments",
+      "checked": "2026-11-20",
+      "used": "알맞은 1차 자료가 있으면 그것을 쓰고, 핵심 내용은 둘 이상의 출처로 확인하며, 읽는 사람이 다시 확인할 수 있게 출처를 밝히고, 뒷받침하는 근거와 반대되는 근거를 함께 본다는 원칙을 참고했다. 문서 종류에 따른 등급, '서로 독립인 출처 둘' 요건, 반증 검색, 근거마다 주소와 인용문을 남기는 방식에 반영했다."
+    },
+    {
+      "name": "The Principles of the Truth-O-Meter: PolitiFact's methodology for independent fact-checking",
+      "publisher": "PolitiFact, Poynter Institute",
+      "url": "https://www.politifact.com/article/2018/feb/12/principles-truth-o-meter-politifacts-methodology-i/",
+      "checked": "2026-11-20",
+      "used": "문장이 글자 그대로 사실인지, 달리 읽힐 여지가 있는지, 빠진 맥락이 있는지를 나눠 보고, 주장한 쪽에 입증할 책임이 있으며, 그 주장이 나온 시점의 정보로 판단한다는 원칙을 참고했다. 한정 표현을 따로 판정하는 것, 반례를 못 찾은 것을 '일치'의 근거로 삼지 않는 것, 명제의 기준 시점을 두는 것에 반영했다."
+    },
+    {
+      "name": "언론윤리헌장",
+      "publisher": "한국기자협회, 한국인터넷신문협회",
+      "url": "https://www.journalist.or.kr/news/section4.html?p_num=18",
+      "checked": "2026-11-20",
+      "used": "정확성을 속도보다 앞에 두고, 정보를 성실히 검증해 분명한 근거로 쓰며, 출처를 밝히고, 잘못은 곧바로 분명하게 바로잡는다는 원칙을 참고했다. 근거가 모자라면 '근거 부족'으로 남기는 것과 출처를 밝힌 인용형 수정안에 반영했다."
+    },
+    {
+      "name": "신문윤리강령 및 신문윤리실천요강",
+      "publisher": "한국신문협회, 한국신문방송편집인협회, 한국기자협회",
+      "url": "https://journalist.or.kr/news/section4.html?p_num=21",
+      "checked": "2026-11-20",
+      "used": "확인되지 않은 내용은 그 사실을 밝히고, 보도자료는 검증을 거쳐 쓰며, 옮겨 쓸 때는 출처를 밝힌다는 조항(보도준칙, 취재원의 명시, 저작물의 전재와 인용)을 참고했다. 출처 없이 '~로 알려져 있다'로 흐리지 않는 것과, 옮겨 실은 글을 독립된 출처로 세지 않는 것에 반영했다."
+    }
+  ],
+  "documentTypes": [
+    { "id": "법령·고시 원문", "grade": 1, "about": "법령, 고시, 공고의 원문" },
+    { "id": "공식 통계", "grade": 1, "about": "통계를 만든 기관이 공표한 통계표와 그 설명" },
+    { "id": "원전과 그 번역", "grade": 1, "about": "실록이나 문집 같은 원전과, 공신력 있는 기관이 낸 번역. 명제가 출처로 든 바로 그 자료(그 논문, 그 보고서, 그 책)도 여기에 든다" },
+    {
+      "id": "기관의 공식 안내",
+      "grade": 1,
+      "gradeOutsideRole": 2,
+      "about": "기관이 자기 이름으로 알리는 운영 안내, 지정 현황, 소장품 정보, 보도자료",
+      "role": "그 기관이 직접 정하거나 관리하는 사실(운영, 지정, 소장)일 때만 1등급이다. 그 밖의 사실에는 2등급으로 본다"
+    },
+    { "id": "기관의 해설 글", "grade": 2, "about": "기관이 낸 해설, 교육 자료, 기관 블로그, 기고문" },
+    { "id": "백과사전", "grade": 2, "about": "편집 책임이 있는 백과사전의 항목" },
+    { "id": "학술 논문", "grade": 2, "about": "학술지 논문, 학위 논문, 연구 보고서" },
+    { "id": "언론 보도", "grade": 3, "about": "신문, 방송, 통신사의 기사" },
+    { "id": "위키", "grade": 3, "about": "누구나 고칠 수 있는 위키 문서" },
+    { "id": "블로그·커뮤니티 글", "grade": 3, "about": "개인 블로그, 카페, 게시판, 사회관계망의 글" },
+    { "id": "관광 안내", "grade": 3, "about": "관광 안내 사이트와 여행 정보" },
+    { "id": "그 밖의 글", "grade": 3, "about": "위 어디에도 맞지 않는 글" }
+  ],
+  "requirements": {
+    "인용·출처 귀속": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "need": "원문이나 원자료에서 해당 구절을 확인한다(1등급)",
+      "ifShort": "근거 부족. 확인한 다른 출처의 설명이라면 그 출처를 밝힌 인용형 수정안을 낸다"
+    },
+    "수치·통계": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "need": "원고가 말하는 시점의 1등급 값. 시점이 없으면 현재 값으로 보고 자료의 기준일을 적는다",
+      "ifShort": "근거 부족"
+    },
+    "제원·실측": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "need": "소장하거나 관리하는 기관이 밝힌 값(1등급)",
+      "ifShort": "출처에 따라 값이 갈리면 두 값을 함께 보여 주고 해석 주의. 값을 찾지 못하면 근거 부족"
+    },
+    "분류·지정": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "need": "원고가 말하는 시점의 지정 상태를 보여 주는 지정·관리 기관의 자료(1등급). 시점이 없으면 지금의 자료",
+      "ifShort": "근거 부족"
+    },
+    "운영 정보": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "shortfallIfSeveralReports": "해석 주의",
+      "need": "운영 기관의 공식 안내(1등급). 원고가 지난 시점을 말하면 그 시점의 자료",
+      "ifShort": "여러 보도가 같은 내용이면 해석 주의, 아니면 근거 부족"
+    },
+    "연대·인명·기관명": {
+      "anyOf": [{ "grade": 1, "count": 1 }, { "grade": 2, "count": 2, "independent": true }],
+      "shortfall": "근거 부족",
+      "allowSingleSource": true,
+      "need": "1등급 하나, 또는 서로 독립인 2등급 둘",
+      "ifShort": "독립인 근거가 하나뿐이면 추가 검색으로 1등급을 한 번 더 찾는다. 그래도 없을 때, 서술형 내용이고 우선순위가 낮으면 일치로 두되 '단일 근거'로 표시하고, 연도나 수치처럼 특정 값이 그 근거 하나에 달려 있으면 근거 부족"
+    },
+    "통설": {
+      "anyOf": [{ "grade": 2, "count": 2, "independent": true }],
+      "shortfall": "해석 주의",
+      "need": "서로 독립인 2등급 둘이 같은 내용을 서술한다",
+      "ifShort": "해석 주의. 반증 검색에서 반대 서술이 나오면 함께 보여 준다"
+    },
+    "최상급": {
+      "anyOf": [{ "grade": 1, "count": 1 }],
+      "shortfall": "근거 부족",
+      "need": "1등급 출처가 같은 표현을 같은 범위로 쓴다",
+      "ifShort": "반례가 있으면 불일치. 직접 근거가 없으면 근거 부족으로 두고 반례는 찾지 못했다고 적는다. 묘사로 바꾼 축소안을 낸다"
+    },
+    "인과": {
+      "anyOf": [{ "grade": 1, "count": 1 }, { "grade": 2, "count": 2, "independent": true, "docTypes": ["학술 논문"] }],
+      "shortfall": "근거 부족",
+      "need": "1등급, 또는 서로 독립인 학술 2등급 둘이 단정해 서술한다",
+      "ifShort": "출처는 추정이나 해설로 말하는데 원고가 단정하면 해석 주의. 근거가 없으면 근거 부족과 삭제 권고"
+    },
+    "기타": {
+      "anyOf": [{ "grade": 1, "count": 1 }, { "grade": 2, "count": 2, "independent": true }],
+      "shortfall": "근거 부족",
+      "need": "1등급 하나, 또는 서로 독립인 2등급 둘",
+      "ifShort": "근거 부족. 기준에 없는 유형이라고 해서 자동으로 '일치'가 되지 않는다"
+    }
+  },
+  "qualifiers": [
+    "가장", "최초", "처음", "첫", "유일", "유일하게", "최대", "최고", "최다", "최장", "최소",
+    "모두", "모든", "전부", "항상", "언제나", "매일", "매년", "누구나", "반드시", "전혀", "오직",
+    "세계에서", "세계 최초", "국내에서", "국내 최초", "국내 유일", "아시아에서"
+  ],
+  "judgeGuidelines": [
+    "이름이 같거나 비슷한 다른 대상의 자료가 섞여 들어온다. 복제품, 복각본, 탁본, 모형, 사진 자료, 같은 이름의 다른 유물, 이름이 비슷한 다른 기관의 페이지는 대상이 다르다. 지정 종목이나 제작 연대, 재질이 명제의 대상과 맞지 않으면 다른 대상으로 본다",
+    "기준 시점이 '현재'인 명제의 시점은 이렇게 본다. 기관이 공식 사이트에 올려 둔 안내는 날짜가 없어도 지금의 사실이다(적용 가능). 소장처, 지정, 연혁처럼 잘 바뀌지 않는 사실은 백과사전과 해설 글도 지금의 사실로 본다. 관람 시간, 요금, 휴관일, 행사 일정처럼 자주 바뀌는 사실은 운영 기관의 안내가 아니면 날짜가 최근 1년 안일 때만 적용 가능이고, 아니면 미확인이다",
+    "'~에 따르면', '~가 밝혔다'처럼 출처를 든 명제는 그 출처가 실제로 그렇게 말했는지를 판정한다. 그 출처 자체를 찾았으면 문서 종류를 '원전과 그 번역'으로 고른다. 다른 자료가 내용을 달리 적고 있어도 이 명제의 반박 근거는 아니므로, 그런 근거의 관계는 '판단 불충분'으로 적는다. 달리 적은 자료가 있다는 점은 판정의 까닭에 적는다",
+    "출처가 한 가지를 사실로 서술하면서 다른 견해나 이설을 함께 소개한 경우, 그 출처는 사실로 서술한 쪽을 지지하는 것으로 본다. 이설을 소개한 대목의 관계는 '판단 불충분'으로 적고, 이설이 있다는 점은 판정의 까닭에 적는다. 이설을 사실로 서술하는 자료가 따로 있을 때만 반박 근거로 본다",
+    "기관의 공식 안내라도 그 기관이 정하거나 관리하지 않는 사실을 말할 때가 있다. 다른 기관의 소장품, 역사적 평가, 유래 같은 것이다. 그때는 그 기관이 직접 정하는 사실이 아니라고 적는다",
+    "기관이 낸 잡지 기사, 기고문, 해설 자료는 공식 안내가 아니라 해설 글이다. 글쓴이 개인의 견해라고 밝힌 글도 그렇다",
+    "출처가 '~로 추정된다', '~라고 전한다', '~로 알려져 있다'처럼 조심스럽게 쓴 것을 원고가 단정해 쓰면, 원고의 표현이 출처보다 센 것이다",
+    "가장, 최초, 유일 같은 표현은 범위까지 같아야 한다. 출처가 '우리나라에서 가장'이라고 쓴 것은 '세계에서 가장'을 뒷받침하지 못한다. 더 앞서거나 더 큰 다른 사례를 보여 주는 자료는 반례다",
+    "연대는 음력과 양력의 차이로 한 해가 어긋나 보일 수 있다. 자료가 그 차이를 설명하고 있으면 엇갈린 것으로 보지 않는다",
+    "따옴표로 옮긴 말은 원문에 그 말이 그대로 있어야 지지다. 뜻이 비슷한 다른 문장이 있는 것만으로는 지지가 아니다"
+  ],
+  "priority": {
+    "about": "고치기 쉬운지가 아니라 글에 미치는 영향으로 매긴다",
+    "high": ["제목이나 첫머리에 있거나 글의 논지를 떠받치는 주장", "독자가 그대로 따르는 정보(날짜, 시간, 요금)", "자릿수나 단위가 틀린 수치"],
+    "mid": ["그 밖의 본문 사실. 예: 연도, 인명, 소장처, 순서"],
+    "low": ["표기나 명칭을 적는 방식처럼 뜻에 미치는 영향이 작은 것"]
+  },
+  "domains": {
+    "about": "도메인은 두 가지에만 쓴다. 기관 목록은 글을 낸 곳을 확인하는 데 돕고, 낮은 등급 플랫폼 목록에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다. 목록에 없는 도메인이라는 이유만으로 등급을 낮추지 않는다",
+    "institutions": [
+      { "domain": "heritage.go.kr", "publisher": "국가유산청(국가유산포털)" },
+      { "domain": "khs.go.kr", "publisher": "국가유산청" },
+      { "domain": "nrich.go.kr", "publisher": "국립문화유산연구원" },
+      { "domain": "gogung.go.kr", "publisher": "국립고궁박물관" },
+      { "domain": "museum.go.kr", "publisher": "국립중앙박물관과 소속 국립박물관" },
+      { "domain": "nfm.go.kr", "publisher": "국립민속박물관" },
+      { "domain": "much.go.kr", "publisher": "대한민국역사박물관" },
+      { "domain": "mmca.go.kr", "publisher": "국립현대미술관" },
+      { "domain": "nl.go.kr", "publisher": "국립중앙도서관" },
+      { "domain": "archives.go.kr", "publisher": "국가기록원" },
+      { "domain": "mcst.go.kr", "publisher": "문화체육관광부" },
+      { "domain": "korea.kr", "publisher": "대한민국 정책브리핑" },
+      { "domain": "law.go.kr", "publisher": "법제처(국가법령정보센터)" },
+      { "domain": "kostat.go.kr", "publisher": "통계청" },
+      { "domain": "kosis.kr", "publisher": "통계청(국가통계포털)" },
+      { "domain": "index.go.kr", "publisher": "지표누리" },
+      { "domain": "bok.or.kr", "publisher": "한국은행" },
+      { "domain": "history.go.kr", "publisher": "국사편찬위원회" },
+      { "domain": "itkc.or.kr", "publisher": "한국고전번역원" },
+      { "domain": "aks.ac.kr", "publisher": "한국학중앙연구원" },
+      { "domain": "unesco.org", "publisher": "유네스코" },
+      { "domain": "unesco.or.kr", "publisher": "유네스코한국위원회" }
+    ],
+    "lowGradePlatforms": [
+      "blog.naver.com", "cafe.naver.com", "post.naver.com", "kin.naver.com", "tistory.com", "brunch.co.kr",
+      "velog.io", "medium.com", "blogspot.com", "wordpress.com", "tumblr.com", "cafe.daum.net",
+      "wikipedia.org", "namu.wiki", "wikiwand.com", "fandom.com", "librewiki.net",
+      "dcinside.com", "ruliweb.com", "clien.net", "fmkorea.com", "theqoo.net", "instiz.net", "reddit.com", "quora.com",
+      "x.com", "twitter.com", "facebook.com", "instagram.com", "threads.net", "pinterest.com"
+    ],
+    "excluded": [
+      { "domain": "youtube.com", "why": "동영상" },
+      { "domain": "youtu.be", "why": "동영상" },
+      { "domain": "tv.naver.com", "why": "동영상" },
+      { "domain": "tv.kakao.com", "why": "동영상" },
+      { "domain": "tiktok.com", "why": "동영상" },
+      { "domain": "vimeo.com", "why": "동영상" }
+    ],
+    "provisional": {
+      "about": "원문을 열기 전에 어느 페이지부터 열지 정하는 데만 쓰는 어림이다. 판정에 쓰는 등급이 아니다",
+      "grade2": [
+        "encykorea.aks.ac.kr", "contents.history.go.kr", "folkency.nfm.go.kr", "terms.naver.com", "doopedia.co.kr", "britannica.com",
+        "koreascience.kr", "dbpia.co.kr", "kci.go.kr", "riss.kr", "kiss.kstudy.com", "scholar.kyobobook.co.kr"
+      ],
+      "suffixes": [
+        { "suffix": ".go.kr", "grade": 1 },
+        { "suffix": ".gov", "grade": 1 },
+        { "suffix": ".or.kr", "grade": 2 },
+        { "suffix": ".ac.kr", "grade": 2 },
+        { "suffix": ".re.kr", "grade": 2 },
+        { "suffix": ".edu", "grade": 2 },
+        { "suffix": ".museum", "grade": 2 }
+      ]
+    }
+  }
+}

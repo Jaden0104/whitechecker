@@ -1,0 +1,31 @@
+{
+  "name": "whitechecker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "발행 전 원고의 사실 취약점을 먼저 찾아 주는 팩트체크 에이전트",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "2.1.0",
+    "mdast-util-gfm": "3.1.0",
+    "micromark-extension-gfm": "3.0.0",
+    "next": "16.4.6",
+    "parse5": "8.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/mdast": "4.0.4",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}
