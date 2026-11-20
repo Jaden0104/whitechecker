@@ -25,15 +25,21 @@ jobs:
 
       - name: npm install, build, and test
         run: |
-          npm install
+          npm ci
           npm run build --if-present
           npm run test --if-present
+
+      # 빌드 결과 폴더(.next)는 이름이 점으로 시작해서, 폴더째 올리면 upload-artifact가 빼고 올린다.
+      # 그래서 실행에 필요한 것을 zip 하나로 묶어 올린다. 빌드 캐시(.next/cache)는 실행에 쓰이지 않아 뺀다.
+      - name: Zip artifact for deployment
+        run: zip -qr release.zip ./* .next -x '.next/cache/*'
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: release.zip
+          retention-days: 1
 
   deploy:
     runs-on: ubuntu-latest
@@ -47,7 +53,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -61,5 +67,4 @@ jobs:
         with:
           app-name: 'whitechecker'
           slot-name: 'Production'
-          package: .
-          
+          package: release.zip
