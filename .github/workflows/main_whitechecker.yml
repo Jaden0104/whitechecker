@@ -68,3 +68,7 @@ jobs:
           app-name: 'whitechecker'
           slot-name: 'Production'
           package: release.zip
+          # 지난 배포의 남은 파일을 지우고, 배포가 끝나면 앱을 다시 시작한다.
+          # 기본값에 맡겨 두었더니 둘 다 일어나지 않아 직접 지정한다.
+          clean: true
+          restart: true
