@@ -44,7 +44,7 @@ function createKit() {
   const access = { code: '' };
   const api = createApi(() => access.code);
   const runner = createRunner(store, api);
-  // 선택한 문장 다시 검증(F14)은 실행과 따로 돈다. 같은 저장소와 같은 서버 경로를 쓴다
+  // 고쳐 쓴 문장 다시 검증(F14)은 실행과 따로 돈다. 같은 저장소와 같은 서버 경로를 쓴다
   const rechecker = createRechecker(store, api);
   return { store, access, runner, rechecker };
 }

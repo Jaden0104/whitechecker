@@ -52,11 +52,12 @@ export function applyReview(run: RunState, sentenceId: number, action: ReviewAct
     }
   } else {
     next.edited = null;
-    // 고쳐 쓴 글에 대한 재검증 결과는 그 글과 함께 치운다
-    if (rechecks?.[sentenceId]?.target === 'edited') {
-      rechecks = { ...rechecks };
-      delete rechecks[sentenceId];
-    }
+  }
+  // 고쳐 쓴 글이 없어지면 그 글에 대한 재검증 결과도 함께 치운다.
+  // 되돌렸을 때만이 아니라, 원문이나 자동 수정안과 같게 고쳐 저장했을 때도 그렇다
+  if (before.edited !== null && next.edited === null && rechecks?.[sentenceId]?.target === 'edited') {
+    rechecks = { ...rechecks };
+    delete rechecks[sentenceId];
   }
 
   const candidateAfter = next.edited !== null ? next.edited : (autoRevision(run, sentenceId)?.revised ?? null);

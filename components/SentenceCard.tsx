@@ -1,13 +1,15 @@
-// 문장과 수정안(F7, F10, F14): 원문과 수정안, 이 문장에서 확인한 사실, 편집자의 선택(채택·고쳐 쓰기·보류), 다시 검증.
+// 문장과 수정안(F7, F10, F14): 원문과 수정안, 이 문장에서 확인한 사실, 편집자의 선택(채택·고쳐 쓰기·보류), 고쳐 쓴 문장 다시 검증.
 // 검토 단위는 문장이다. 한 문장에 확인한 사실이 여럿이어도 수정안과 선택은 문장마다 하나다.
+// 다시 검증하는 것은 편집자가 고쳐 쓴 글뿐이다. 원문에는 처음 검증의 판정 하나만 둔다(한 글에는 검증 결과가 하나).
 import { useState, type ReactNode } from 'react';
 import { editRanges, sharedEnds } from '@/lib/client/text';
 import {
   autoRevision,
   candidateText,
+  canRecheck,
   factNote,
+  recheckOf,
   recheckStatus,
-  recheckTarget,
   reviewOf,
   staysDirect,
   viewOf,
@@ -40,23 +42,22 @@ const STATUS_LABEL: Record<RecheckStatus, string> = {
   '이전 문장에 대한 결과': '이전 문장에 대한 결과',
 };
 
-/** 다시 검증한 결과. 요청할 때의 글에 묶여 있어, 그 뒤에 글이 바뀌면 이전 문장에 대한 결과로 보인다 */
+/**
+ * 고쳐 쓴 글을 다시 검증한 결과. 요청할 때의 글에 묶여 있어, 그 뒤에 글을 또 고치면 앞서 고쳐 쓴 글에 대한 결과로 보인다.
+ * 재검증 상태(검증 중, 현재 문장 검증 완료, 이전 문장에 대한 결과)는 카드 머리에 한 번만 적는다
+ */
 function RecheckBlock({ run, sentence }: { run: RunState; sentence: Sentence }) {
-  const entry = run.rechecks?.[sentence.id];
+  const entry = recheckOf(run, sentence.id);
   if (!entry) return null;
-  const stale = entry.state === '완료' && entry.text !== recheckTarget(run, sentence).text;
-  let chip: ReactNode = null;
-  if (entry.state === '진행 중') chip = <span className="chip-state busy">검증 중</span>;
-  else if (entry.state === '완료') chip = stale ? <span className="chip-state stale">이전 문장에 대한 결과</span> : <span className="chip-state done">현재 문장 검증 완료</span>;
+  const stale = entry.state === '완료' && entry.text !== reviewOf(run, sentence.id).edited;
   return (
     <div className="recheck">
       <h4>
         {entry.state === '진행 중' && <i className="dot" aria-hidden="true" />}
-        {entry.target === 'edited' ? '고쳐 쓴 문장을 다시 검증한 결과' : '원문을 다시 검증한 결과'}
-        {chip}
+        {stale ? '앞서 고쳐 쓴 글을 검증한 결과' : '고쳐 쓴 문장을 다시 검증한 결과'}
       </h4>
       {stale && <p className="was">검증한 글: {entry.text}</p>}
-      {entry.state === '진행 중' && entry.claims.length === 0 && <p>이 문장에서 명제를 다시 뽑고 있습니다. 제목과 앞 문맥을 함께 보냅니다.</p>}
+      {entry.state === '진행 중' && entry.claims.length === 0 && <p>이 문장에서 명제를 다시 뽑고 있습니다. 제목과 앞뒤 문맥을 함께 보냅니다.</p>}
       {entry.state === '실패' && <p className="warn">다시 검증하지 못했습니다({entry.failure || '사유를 알 수 없음'}). 한 번 더 눌러 볼 수 있습니다.</p>}
       {entry.state === '중단' && <p className="warn">다시 검증하다가 멈췄습니다. 한 번 더 누르면 처음부터 다시 합니다.</p>}
       {entry.state === '완료' && entry.claims.length === 0 && <p>이 문장에서는 확인할 사실을 찾지 못했습니다.</p>}
@@ -79,6 +80,17 @@ function RecheckBlock({ run, sentence }: { run: RunState; sentence: Sentence }) 
                   <span>{e.claim.statement}</span>
                 </div>
                 {view.judgment?.reason && <p className="rc-reason">{view.judgment.reason}</p>}
+                {/* 고쳐 쓴 글에서도 손볼 것이 나오면, 어떻게 하라는지까지 보여 준다 */}
+                {view.judgment?.action && (
+                  <p className="rc-reason">
+                    <span className="rc-label">권고</span> {view.judgment.action}
+                  </p>
+                )}
+                {view.judgment && view.judgment.fix.kind !== '없음' && (
+                  <p className="rc-reason">
+                    <span className="rc-label">고칠 내용</span> {view.judgment.fix.instruction} <small>({view.judgment.fix.kind})</small>
+                  </p>
+                )}
                 {done && staysDirect(view) && <p className="rc-reason">공개 자료로 확인할 수 없는 주장입니다. {e.claim.privateReason}</p>}
                 {evidence.length > 0 && (
                   <details className="more">
@@ -112,7 +124,11 @@ export function SentenceCard({ run, sentence, currentId, running, onSelect, onRe
   const mine = run.claims.filter((e) => e.claim.sentenceId === sentence.id).map((e) => viewOf(run, e));
   const pending = mine.filter((v) => v.state !== '완료');
   const status = recheckStatus(run, sentence);
-  const rechecking = run.rechecks?.[sentence.id]?.state === '진행 중';
+  const recheck = recheckOf(run, sentence.id);
+  /** 지금의 고쳐 쓴 글을 검증하는 중인지 */
+  const recheckingNow = recheck?.state === '진행 중' && recheck.text === edited;
+  /** 다시 검증 단추는 고쳐 쓴 글이 있고, 그 글을 아직 끝까지 검증하지 않았을 때만 보인다(한 글에는 검증 결과가 하나) */
+  const showRecheck = recheckingNow || canRecheck(run, sentence.id);
   const checkedNow = status === '현재 문장 검증 완료';
   /** 손봐야 할 판정이 난 문장인지. 그런 문장에만 보류를 고를 수 있게 한다 */
   const flagged = mine.some((v) => v.verdict !== null && v.verdict !== '일치');
@@ -286,8 +302,8 @@ export function SentenceCard({ run, sentence, currentId, running, onSelect, onRe
           <div className="editor">
             <textarea value={draft} onChange={(event) => setDraft(event.target.value)} aria-label="수정안 고쳐 쓰기" autoFocus />
             <p className="hint">
-              저장하면 이 글이 새 수정안이 됩니다. 원문은 그대로 남고, 채택해야 내보낼 때 반영됩니다. 굵은 글씨(**)와 링크 표시는 원고에 적힌 꼴 그대로
-              둡니다.
+              저장하면 이 글이 새 수정안이 됩니다. 원문은 그대로 남고, 채택해야 내보낼 때 반영됩니다. 저장한 뒤에는 이 문장만 다시 검증할 수 있습니다. 굵은
+              글씨(**)와 링크 표시는 원고에 적힌 꼴 그대로 둡니다.
             </p>
             {notice && (
               <p className="said warn" role="status">
@@ -341,18 +357,20 @@ export function SentenceCard({ run, sentence, currentId, running, onSelect, onRe
                   {auto ? '자동 수정안으로 되돌리기' : '고쳐 쓴 글 지우기'}
                 </button>
               )}
-              <button
-                type="button"
-                className={edited !== null && !checkedNow ? 'btn' : 'btn quiet'}
-                disabled={running || rechecking}
-                title={running ? '검증이 끝난 뒤에 쓸 수 있습니다' : undefined}
-                onClick={() => {
-                  setNotice('');
-                  onRecheck(sentence.id);
-                }}
-              >
-                {rechecking ? '다시 검증하는 중' : edited !== null ? '고쳐 쓴 문장 다시 검증' : '이 문장만 다시 검증'}
-              </button>
+              {showRecheck && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={running || recheckingNow}
+                  title={running ? '검증이 끝난 뒤에 쓸 수 있습니다' : undefined}
+                  onClick={() => {
+                    setNotice('');
+                    onRecheck(sentence.id);
+                  }}
+                >
+                  {recheckingNow ? '다시 검증하는 중' : '고쳐 쓴 문장 다시 검증'}
+                </button>
+              )}
             </div>
           </>
         )}

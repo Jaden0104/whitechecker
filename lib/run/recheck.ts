@@ -1,11 +1,13 @@
-// 선택한 문장 다시 검증(F14). 편집자가 고른 문장을 처음부터 다시 추출하고 검증한다.
-// 고쳐 쓴 문장이 맞는지 확인하는 데 쓴다. 결과는 요청할 때의 글에 묶어 두고, 판정표(원문을 검증한 기록)는 바꾸지 않는다.
+// 고쳐 쓴 문장 다시 검증(F14). 편집자가 고쳐 쓴 글을 처음부터 다시 추출하고 검증한다.
+// 다시 검증하는 것은 고쳐 쓴 글뿐이다. 원문에는 처음 검증의 판정 하나만 두고, 고쳐 쓴 글도 한 글에 결과를 하나만 둔다.
+// 검색 결과는 부를 때마다 조금씩 달라서, 같은 글을 또 검증하면 판정이 둘 생기고 어느 쪽을 따를지 알 수 없게 된다.
+// 결과는 요청할 때의 글에 묶어 두고, 판정표(원문을 검증한 기록)는 바꾸지 않는다.
 // 서버를 부르는 부분은 실행(runner)과 같은 것을 밖에서 받는다.
 import { followingText } from '../chunks.ts';
 import { LIMITS } from '../limits.ts';
 import { stripMarkup } from '../sentences.ts';
 import type { Usage } from '../types.ts';
-import { isLead, recheckTarget, type ClaimEntry, type RecheckEntry, type RunState, type Step } from './model.ts';
+import { canRecheck, isLead, reviewOf, type ClaimEntry, type RecheckEntry, type RunState, type Step } from './model.ts';
 import type { RunApi, RunStore } from './runner.ts';
 
 export function createRechecker(store: RunStore, api: RunApi, options: { now?: () => number } = {}) {
@@ -17,14 +19,16 @@ export function createRechecker(store: RunStore, api: RunApi, options: { now?: (
     const start = store.get();
     const sentence = start?.sentences.find((s) => s.id === sentenceId);
     if (!start || !sentence) return;
-    // 같은 문장을 다시 요청하면 앞선 요청은 멈춘다
+    // 고쳐 쓴 글이 없거나, 그 글을 이미 끝까지 검증했거나, 지금 검증하는 중이면 하지 않는다
+    if (!canRecheck(start, sentenceId)) return;
+    const text = reviewOf(start, sentenceId).edited as string;
+    // 같은 문장의 앞선 글을 검증하던 요청이 있으면 멈춘다
     controllers.get(sentenceId)?.abort();
     const mine = new AbortController();
     controllers.set(sentenceId, mine);
     const signal = mine.signal;
     const runId = start.runId;
     const token = `${now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const { text, target } = recheckTarget(start, sentence);
     const plain = stripMarkup(text);
     const startedAt = now();
 
@@ -42,7 +46,7 @@ export function createRechecker(store: RunStore, api: RunApi, options: { now?: (
 
     store.set((prev) =>
       prev && prev.runId === runId
-        ? { ...prev, rechecks: { ...prev.rechecks, [sentenceId]: { token, text, target, state: '진행 중', failure: '', claims: [], at: new Date(now()).toISOString() } } }
+        ? { ...prev, rechecks: { ...prev.rechecks, [sentenceId]: { token, text, target: 'edited', state: '진행 중', failure: '', claims: [], at: new Date(now()).toISOString() } } }
         : prev,
     );
 
@@ -141,7 +145,7 @@ export function createRechecker(store: RunStore, api: RunApi, options: { now?: (
   }
 
   return {
-    /** 문장 하나를 다시 검증한다. 고쳐 쓴 글이 있으면 그 글을, 없으면 원문을 검증한다 */
+    /** 고쳐 쓴 문장 하나를 다시 검증한다. 고쳐 쓴 글이 없거나 그 글을 이미 끝까지 검증했으면 아무것도 하지 않는다 */
     start(sentenceId: number): Promise<void> {
       const job = work(sentenceId).finally(() => jobs.delete(job));
       jobs.add(job);

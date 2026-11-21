@@ -7,6 +7,7 @@ import {
   candidateText,
   isAdopted,
   isResolved,
+  recheckOf,
   recheckStatus,
   reviewOf,
   staysDirect,
@@ -170,6 +171,38 @@ function localStamp(iso: string): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
+/**
+ * 사실 하나를 검토 기록(.md)에 적는다: 판정과 명제, 유형, 까닭, 고칠 내용, 권고, 근거의 인용문과 출처, 확인일.
+ * 원문에서 확인한 사실과 고쳐 쓴 문장을 다시 검증한 사실을 같은 꼴로 적는다
+ */
+function factLines(view: ClaimView, index: number, outcome: string): string[] {
+  const { claim } = view.entry;
+  const done = view.state === '완료' && view.verdict !== null;
+  const lines = [`  ${index + 1}. [${done ? view.verdict : view.state}] ${claim.statement}${outcome ? ` → ${outcome}` : ''}`];
+  lines.push(`     - 유형: ${claim.type}, 기준 시점: ${claim.asOf}${view.judgment?.priority ? `, 편집 우선순위: ${view.judgment.priority}` : ''}`);
+  if (!done) {
+    if (view.failure) lines.push(`     - 실패 사유: ${view.failure}`);
+    return lines;
+  }
+  if (staysDirect(view)) {
+    lines.push(`     - 공개 자료로 확인할 수 없는 까닭: ${claim.privateReason || '적혀 있지 않음'}`);
+    if (view.direct?.note) lines.push(`     - 찾아본 결과: ${view.direct.note}`);
+    return lines;
+  }
+  const judgment = view.judgment;
+  if (!judgment) return lines;
+  lines.push(`     - 까닭: ${judgment.reason}`);
+  if (judgment.lowered) lines.push(`     - 판정을 바꾼 규칙: ${judgment.lowered.rule}(${judgment.lowered.note})`);
+  if (judgment.fix.kind !== '없음') lines.push(`     - 고칠 내용(${judgment.fix.kind}): ${judgment.fix.instruction}`);
+  if (judgment.action) lines.push(`     - 권고: ${judgment.action}`);
+  for (const e of evidenceLines(view)) {
+    lines.push(`     - 근거 ${e.no}(${e.relation}): "${e.quote}"`);
+    lines.push(`       출처 ${e.sourceNo}: ${[e.publisher, e.grade ? `${e.grade}등급` : '', e.docType, e.url].filter(Boolean).join(', ')}`);
+  }
+  lines.push(`     - 확인일: ${judgment.checkedAt}`);
+  return lines;
+}
+
 /** 검토 기록(.md). 문장 단위로 묶고, 그 아래에 사실별 판정과 까닭, 근거를 적는다 */
 export function reviewRecordMarkdown(run: RunState, plan: ExportPlan, exportedAt: string): string {
   const lines: string[] = [];
@@ -201,43 +234,15 @@ export function reviewRecordMarkdown(run: RunState, plan: ExportPlan, exportedAt
     const manual = plan.manual.find((m) => m.sentenceId === sentence.id);
     if (manual) lines.push(`- 원고에 자동으로 반영하지 않음: ${manual.why}`);
     lines.push('- 확인한 사실');
-    views.forEach((view, i) => {
-      const { claim } = view.entry;
-      const done = view.state === '완료' && view.verdict !== null;
-      const outcome = outcomeOf(run, view);
-      lines.push(`  ${i + 1}. [${done ? view.verdict : view.state}] ${claim.statement}${outcome ? ` → ${outcome}` : ''}`);
-      lines.push(`     - 유형: ${claim.type}, 기준 시점: ${claim.asOf}${view.judgment?.priority ? `, 편집 우선순위: ${view.judgment.priority}` : ''}`);
-      if (!done) {
-        if (view.failure) lines.push(`     - 실패 사유: ${view.failure}`);
-        return;
-      }
-      if (staysDirect(view)) {
-        lines.push(`     - 공개 자료로 확인할 수 없는 까닭: ${claim.privateReason || '적혀 있지 않음'}`);
-        if (view.direct?.note) lines.push(`     - 찾아본 결과: ${view.direct.note}`);
-        return;
-      }
-      const judgment = view.judgment;
-      if (!judgment) return;
-      lines.push(`     - 까닭: ${judgment.reason}`);
-      if (judgment.lowered) lines.push(`     - 판정을 바꾼 규칙: ${judgment.lowered.rule}(${judgment.lowered.note})`);
-      if (judgment.fix.kind !== '없음') lines.push(`     - 고칠 내용(${judgment.fix.kind}): ${judgment.fix.instruction}`);
-      if (judgment.action) lines.push(`     - 권고: ${judgment.action}`);
-      for (const e of evidenceLines(view)) {
-        lines.push(`     - 근거 ${e.no}(${e.relation}): "${e.quote}"`);
-        lines.push(`       출처 ${e.sourceNo}: ${[e.publisher, e.grade ? `${e.grade}등급` : '', e.docType, e.url].filter(Boolean).join(', ')}`);
-      }
-      lines.push(`     - 확인일: ${judgment.checkedAt}`);
-    });
-    const recheck = run.rechecks?.[sentence.id];
+    views.forEach((view, i) => lines.push(...factLines(view, i, outcomeOf(run, view))));
+    // 고쳐 쓴 문장을 다시 검증한 결과. 채택한 글이 무엇을 근거로 확인됐는지 알 수 있게 근거와 출처까지 적는다
+    const recheck = recheckOf(run, sentence.id);
     if (recheck && recheck.state === '완료') {
-      const stale = recheck.text !== (review.edited ?? sentence.source);
-      lines.push(`- ${recheck.target === 'edited' ? '고쳐 쓴 문장' : '원문'}을 다시 검증한 결과(${recheck.at.slice(0, 10)})${stale ? ' — 이전 문장에 대한 결과' : ''}`);
+      const stale = recheck.text !== review.edited;
+      lines.push(`- 고쳐 쓴 문장을 다시 검증한 결과(${recheck.at.slice(0, 10)})${stale ? ' — 이전 문장에 대한 결과' : ''}`);
       if (stale) lines.push(`  - 검증한 글: ${recheck.text}`);
       if (recheck.claims.length === 0) lines.push('  - 확인할 사실을 찾지 못했습니다');
-      for (const e of recheck.claims) {
-        const v = viewOf(run, e);
-        lines.push(`  - [${v.state === '완료' && v.verdict ? v.verdict : v.state}] ${e.claim.statement}${v.judgment?.reason ? ` — ${v.judgment.reason}` : ''}`);
-      }
+      recheck.claims.forEach((e, i) => lines.push(...factLines(viewOf(run, e), i, '')));
     }
     lines.push('');
   }
@@ -287,7 +292,7 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
     .map(({ sentence, views }) => {
       const review = reviewOf(run, sentence.id);
       const after = candidateText(run, sentence.id);
-      const recheck = run.rechecks?.[sentence.id];
+      const recheck = recheckOf(run, sentence.id);
       return {
         '문장 번호': sentence.id,
         선택: decisionOf(run, sentence),
@@ -303,10 +308,10 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
         재검증:
           recheck && recheck.state === '완료'
             ? {
-                대상: recheck.target === 'edited' ? '고쳐 쓴 문장' : '원문',
+                대상: '고쳐 쓴 문장',
                 '검증한 글': recheck.text,
                 '검증한 때': recheck.at,
-                '이전 문장에 대한 결과': recheck.text !== (review.edited ?? sentence.source),
+                '이전 문장에 대한 결과': recheck.text !== review.edited,
                 결과: recheck.claims.map((e) => claimRecord(viewOf(run, e))),
               }
             : null,

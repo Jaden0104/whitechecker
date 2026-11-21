@@ -174,6 +174,8 @@ ins { background: var(--ins-bg); color: var(--ins-ink); text-decoration: underli
 .recheck .rc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .recheck .rc-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
 .recheck .rc-reason { margin: 3px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.recheck .rc-reason .rc-label { color: var(--ink-3); margin-right: 4px; }
+.recheck .rc-reason small { color: var(--ink-3); font-size: inherit; }
 .recheck details.more { margin-top: 4px; }
 .recheck .rc-evidence { margin-top: 8px; }
 .reason { margin: 0; font-size: 15.5px; line-height: 1.7; }

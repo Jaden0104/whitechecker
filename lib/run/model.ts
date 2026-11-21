@@ -63,13 +63,16 @@ export interface ReviewEntry {
   at: string;
 }
 
-/** 문장 하나를 다시 검증한 결과(F14). 요청할 때의 글에 묶는다. 그 뒤에 글이 바뀌면 이전 문장에 대한 결과가 된다 */
+/** 고쳐 쓴 문장 하나를 다시 검증한 결과(F14). 요청할 때의 글에 묶는다. 그 뒤에 글이 바뀌면 이전 문장에 대한 결과가 된다 */
 export interface RecheckEntry {
   /** 요청 번호. 늦게 도착한 앞선 요청의 응답이 지금의 결과를 덮어쓰지 않게 한다 */
   token: string;
   /** 다시 검증한 글(원고에 적힌 꼴) */
   text: string;
-  /** 편집자가 고쳐 쓴 글을 검증했는지, 원문을 검증했는지 */
+  /**
+   * 검증한 글의 종류. 이제는 편집자가 고쳐 쓴 글('edited')만 다시 검증한다.
+   * 'original'은 원문도 다시 검증하던 때에 저장된 기록에만 남아 있고, 화면과 내보내기에서는 쓰지 않는다(recheckOf)
+   */
   target: 'edited' | 'original';
   state: '진행 중' | '완료' | '실패' | '중단';
   failure: string;
@@ -366,22 +369,40 @@ export function isAdopted(run: RunState, sentenceId: number): boolean {
   return reviewOf(run, sentenceId).choice === '채택' && candidateText(run, sentenceId) !== null;
 }
 
-/** 다시 검증할 글: 편집자가 고쳐 쓴 글이 있으면 그것, 없으면 원문 */
-export function recheckTarget(run: RunState, sentence: Sentence): { text: string; target: 'edited' | 'original' } {
-  const edited = reviewOf(run, sentence.id).edited;
-  return edited !== null ? { text: edited, target: 'edited' } : { text: sentence.source, target: 'original' };
+/**
+ * 문장에 딸린 재검증 기록(F14). 다시 검증하는 것은 편집자가 고쳐 쓴 글뿐이고, 결과는 그 글에 딸린다.
+ * 원문에는 처음 검증의 판정 하나만 둔다. 같은 글에 판정이 둘 생기면 어느 쪽을 따를지 알 수 없기 때문이다.
+ * 그래서 원문을 다시 검증한 예전 기록이 저장돼 있거나, 고쳐 쓴 글이 지금은 없으면 돌려주지 않는다
+ */
+export function recheckOf(run: RunState, sentenceId: number): RecheckEntry | null {
+  const entry = run.rechecks?.[sentenceId];
+  return entry && entry.target === 'edited' && reviewOf(run, sentenceId).edited !== null ? entry : null;
+}
+
+/**
+ * 지금의 고쳐 쓴 글을 다시 검증할 수 있는지(F14). 한 글에는 검증 결과를 하나만 둔다.
+ * 고쳐 쓴 글이 있고, 그 글을 끝까지 검증한 기록이 없을 때만 할 수 있다. 실패했거나 멈춘 검증은 다시 할 수 있다
+ */
+export function canRecheck(run: RunState, sentenceId: number): boolean {
+  const edited = reviewOf(run, sentenceId).edited;
+  if (edited === null) return false;
+  const entry = recheckOf(run, sentenceId);
+  if (!entry || entry.text !== edited) return true;
+  if (entry.state === '진행 중') return false;
+  // 딸린 명제 가운데 하나라도 실패했거나 멈췄으면 끝까지 검증한 것이 아니다
+  return !(entry.state === '완료' && entry.claims.every((e) => e.state === '완료'));
 }
 
 export type RecheckStatus = '미검증' | '검증 중' | '현재 문장 검증 완료' | '이전 문장에 대한 결과';
 
-/** 재검증 상태(F14). 고쳐 쓰지도 않았고 다시 검증한 적도 없으면 null */
+/** 재검증 상태(F14). 고쳐 쓰지 않은 문장에는 재검증 상태가 없다(null) */
 export function recheckStatus(run: RunState, sentence: Sentence): RecheckStatus | null {
-  const entry = run.rechecks?.[sentence.id];
-  const now = recheckTarget(run, sentence);
+  const edited = reviewOf(run, sentence.id).edited;
+  if (edited === null) return null;
+  const entry = recheckOf(run, sentence.id);
   if (entry?.state === '진행 중') return '검증 중';
-  if (entry?.state === '완료' && entry.text === now.text) return '현재 문장 검증 완료';
-  if (entry?.state === '완료' && entry.target === 'edited' && now.target === 'edited') return '이전 문장에 대한 결과';
-  return now.target === 'edited' ? '미검증' : null;
+  if (entry?.state === '완료') return entry.text === edited ? '현재 문장 검증 완료' : '이전 문장에 대한 결과';
+  return '미검증';
 }
 
 /** 이 명제가 지금의 수정안에서 어떻게 됐는지 한 줄로 적는다(상세의 '이 문장에서 확인한 사실') */
@@ -419,7 +440,7 @@ export function isResolved(run: RunState, view: ClaimView): boolean {
   if (!isAdopted(run, sentenceId)) return false;
   const edited = reviewOf(run, sentenceId).edited;
   if (edited !== null) {
-    const recheck = run.rechecks?.[sentenceId];
+    const recheck = recheckOf(run, sentenceId);
     return recheck?.state === '완료' && recheck.text === edited && recheck.claims.every((e) => viewOf(run, e).verdict === '일치');
   }
   return autoRevision(run, sentenceId)?.applied.includes(id) ?? false;

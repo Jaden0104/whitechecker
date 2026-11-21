@@ -3,6 +3,7 @@
 // 사용: node tools/check_run.mjs
 import { diffPieces, editRanges, inlineRuns, quoteContext, sharedEnds } from '../lib/client/text.ts';
 import {
+  canRecheck,
   candidateText,
   compareByRank,
   compareRows,
@@ -12,6 +13,7 @@ import {
   hasUnfinished,
   isAdopted,
   isResolved,
+  recheckOf,
   recheckStatus,
   recover,
   reviewOf,
@@ -382,12 +384,15 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   expect('빈 글은 저장하지 않는다', [act(4, { kind: 'save', text: '   ' }) !== '', reviewOf(store.get(), 4).edited], [true, null]);
   expect('수정안이 없는 문장도 고쳐 쓴 뒤에는 채택할 수 있다', (act(5, { kind: 'save', text: '관람료는 없습니다.' }), act(5, { kind: 'adopt' }), isAdopted(store.get(), 5)), true);
 
-  // ---------- 9. 선택한 문장 다시 검증(F14) ----------
+  // ---------- 9. 고쳐 쓴 문장 다시 검증(F14) ----------
   console.log('\n[다시 검증]');
+  /** 어느 저장소에서든 문장을 고쳐 써 저장한다 */
+  const edit = (target, sentenceId, text) => target.set((prev) => applyReview(prev, sentenceId, { kind: 'save', text }, '2026-11-21T10:00:00.000Z').run);
   const rechecker = createRechecker(store, api);
   const claimsBefore = store.get().claims.length;
   const usageBefore = store.get().usage.length;
   const extractBefore = api.calls.extract.length;
+  expect('다시 검증은 고쳐 쓴 글이 있는 문장에서만 할 수 있다', [canRecheck(store.get(), 3), canRecheck(store.get(), 4)], [true, false]);
   await rechecker.start(3);
   let run = store.get();
   const sent = api.calls.extract[extractBefore];
@@ -397,18 +402,34 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   expect('판정표(원문을 검증한 기록)는 바꾸지 않는다', [run.claims.length, viewAt('s3-c2').verdict], [claimsBefore, '근거 부족']);
   expect('재검증의 호출도 사용량에 더한다', run.usage.length > usageBefore, true);
   expect('지금 문장을 검증해 둔 상태가 된다', recheckStatus(run, run.sentences[2]), '현재 문장 검증 완료');
+  // 한 글에는 검증 결과가 하나다. 같은 글을 또 검증하면 판정이 둘 생겨 어느 쪽을 따를지 알 수 없게 된다
+  const extractAfterFirst = api.calls.extract.length;
+  expect('끝까지 검증한 글은 다시 검증할 수 없다', canRecheck(run, 3), false);
+  await rechecker.start(3);
+  expect('  다시 요청해도 서버를 부르지 않고 앞선 결과를 그대로 둔다', [api.calls.extract.length, store.get().rechecks[3].token === run.rechecks[3].token], [extractAfterFirst, true]);
   act(3, { kind: 'adopt' });
   expect('고쳐 쓴 문장을 다시 검증해 모두 일치면 풀린 것으로 본다', [isResolved(store.get(), viewAt('s3-c1')), isResolved(store.get(), viewAt('s3-c2'))], [true, true]);
   act(3, { kind: 'save', text: '크기는 세로 211cm, 가로 124cm입니다.' });
   run = store.get();
   expect('그 뒤에 문장을 다시 고치면 앞선 결과는 이전 문장에 대한 결과가 된다', [recheckStatus(run, run.sentences[2]), isResolved(run, viewAt('s3-c2'))], ['이전 문장에 대한 결과', false]);
+  expect('  글이 달라졌으므로 다시 검증할 수 있다', canRecheck(run, 3), true);
   act(3, { kind: 'revert' });
   expect('고쳐 쓴 글을 버리면 그 재검증 결과도 치운다', [store.get().rechecks[3], candidateText(store.get(), 3)], [undefined, '크기는 세로 211cm, 가로 223cm입니다.']);
+  act(3, { kind: 'save', text: '크기는 세로 211cm, 가로 125cm입니다.' });
+  await rechecker.start(3);
+  expect('(준비) 새로 고쳐 쓴 글을 다시 검증해 둔다', [recheckOf(store.get(), 3)?.state, recheckOf(store.get(), 3)?.claims.map((e) => viewOf(store.get(), e).verdict)], ['완료', ['일치', '불일치']]);
+  act(3, { kind: 'save', text: store.get().revisions[3].revision.revised });
+  expect('자동 수정안과 같게 고쳐 저장해 고쳐 쓴 글이 없어져도 그 재검증 결과를 치운다', [reviewOf(store.get(), 3).edited, store.get().rechecks[3] === undefined, recheckStatus(store.get(), store.get().sentences[2])], [null, true, null]);
 
+  const extractBeforeOriginal = api.calls.extract.length;
   await rechecker.start(4);
   run = store.get();
-  expect('고쳐 쓰지 않은 문장은 원문을 다시 검증한다', [run.rechecks[4].target, run.rechecks[4].claims.map((e) => viewOf(run, e).verdict), recheckStatus(run, run.sentences[3])], ['original', ['일치', '불일치'], '현재 문장 검증 완료']);
+  expect('고쳐 쓰지 않은 문장은 다시 검증하지 않는다(원문에는 처음 검증의 판정 하나만 둔다)', [run.rechecks[4] === undefined, api.calls.extract.length === extractBeforeOriginal, recheckStatus(run, run.sentences[3])], [true, true, null]);
+  // 원문도 다시 검증하던 때에 저장된 기록이 남아 있어도 쓰지 않는다
+  const legacy = { ...run, rechecks: { ...run.rechecks, 4: { token: 't', text: run.sentences[3].source, target: 'original', state: '완료', failure: '', claims: [], at: '2026-11-21T00:00:00.000Z' } } };
+  expect('원문을 다시 검증한 예전 기록은 쓰지 않는다', [recheckOf(legacy, 4), recheckStatus(legacy, legacy.sentences[3]), canRecheck(legacy, 4)], [null, null, false]);
 
+  act(6, { kind: 'save', text: '구독자는 4만 명입니다.' });
   await rechecker.start(6);
   expect('마지막 문장에는 뒤 문맥이 없다', ['after' in api.calls.extract.at(-1), api.calls.extract.at(-1).sentences[0].id], [false, 6]);
 
@@ -420,8 +441,10 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   runner4.start(`# 제목\n\n가 문장입니다. 나 문장입니다.\n\n## 다음 절\n\n다 문장입니다. ${long}\n`);
   await runner4.idle();
   const checker4 = createRechecker(store4, sectioned);
+  edit(store4, 2, '가 문장을 고쳤습니다.');
   await checker4.start(2);
   expect('뒤 문맥은 다음 소제목 앞에서 끊는다', sectioned.calls.extract.at(-1).after, '나 문장입니다.');
+  edit(store4, 5, '다 문장을 고쳤습니다.');
   await checker4.start(5);
   expect('뒤 문맥이 길면 앞부분 200자만 보낸다', [sectioned.calls.extract.at(-1).after.length, sectioned.calls.extract.at(-1).after.startsWith('긴 문장입니다. 긴 문장입니다.')], [200, true]);
 
@@ -435,25 +458,45 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   store2.set(() => store.get());
   await createRechecker(store2, broken).start(5);
   expect('다시 뽑지 못하면 실패로 남기고 사유를 적는다', [store2.get().rechecks[5].state, store2.get().rechecks[5].failure], ['실패', '모델 응답 오류(응답 잘림)']);
+  expect('  실패한 검증은 다시 할 수 있다', canRecheck(store2.get(), 5), true);
+
+  const flaky = reviewApi({ fail: { judge: (body) => (body.claim.statement.includes('가로') ? FAIL('모델 응답 오류') : null) } });
+  const store5 = makeStore();
+  store5.set(() => ({ ...store.get(), rechecks: {} }));
+  edit(store5, 3, '크기는 세로 211cm, 가로 123cm입니다.');
+  await createRechecker(store5, flaky).start(3);
+  expect('딸린 명제가 하나라도 실패했으면 끝까지 검증한 것이 아니라서 다시 할 수 있다', [store5.get().rechecks[3].claims.map((e) => e.state), canRecheck(store5.get(), 3)], [['완료', '실패'], true]);
 
   const slow = reviewApi({ delay: 30 });
   const store3 = makeStore();
   store3.set(() => ({ ...store.get(), rechecks: {} }));
+  edit(store3, 3, '크기는 세로 211cm, 가로 123cm입니다.');
   const again = createRechecker(store3, slow);
   const first = again.start(3);
   await sleep(10);
+  expect('검증하는 중에는 다시 검증할 수 없다', canRecheck(store3.get(), 3), false);
   const second = again.start(3);
   await Promise.all([first, second]);
-  expect('같은 문장을 다시 요청하면 앞선 요청의 응답은 받지 않는다', [store3.get().rechecks[3].state, store3.get().rechecks[3].claims.length], ['완료', 2]);
+  expect('같은 글을 검증하는 중에 다시 요청하면 새로 시작하지 않는다', [store3.get().rechecks[3].state, store3.get().rechecks[3].claims.length, slow.calls.extract.length], ['완료', 2, 1]);
+  edit(store3, 3, '크기는 세로 211cm, 가로 124cm입니다.');
   const third = again.start(3);
   await sleep(10);
+  edit(store3, 3, '크기는 세로 212cm, 가로 123cm입니다.');
+  const fourth = again.start(3);
+  await Promise.all([third, fourth]);
+  expect('글을 또 고쳐 다시 요청하면 앞선 글을 검증하던 요청의 응답은 받지 않는다', [store3.get().rechecks[3].state, store3.get().rechecks[3].text, store3.get().rechecks[3].claims.map((e) => e.claim.statement)], ['완료', '크기는 세로 212cm, 가로 123cm입니다.', ['각석의 크기는 세로 212cm입니다.', '각석의 크기는 가로 123cm입니다.']]);
+  edit(store3, 3, '크기는 세로 213cm, 가로 123cm입니다.');
+  const fifth = again.start(3);
+  await sleep(10);
   again.stopAll();
-  await third;
+  await fifth;
   expect('멈추면 돌던 재검증은 중단으로 남는다', store3.get().rechecks[3].state, '중단');
-  const fourth = again.start(4);
+  expect('  멈춘 검증은 다시 할 수 있다', canRecheck(store3.get(), 3), true);
+  edit(store3, 4, '이 각석은 1985년에 국보가 됐습니다.');
+  const sixth = again.start(4);
   await sleep(10);
   store3.set(() => null);
-  await fourth;
+  await sixth;
   await sleep(60);
   expect('기록을 지우면 늦게 온 재검증 응답이 상태를 되살리지 않는다', store3.get(), null);
   const reopened = recover({ ...store.get(), rechecks: { 3: { token: 't', text: '글', target: 'edited', state: '진행 중', failure: '', claims: [], at: '' } } });

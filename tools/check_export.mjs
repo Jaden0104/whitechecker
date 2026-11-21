@@ -119,6 +119,17 @@ const checker = createRechecker(store2, makeApi({ claimsFor: () => [{ statement:
 await checker.start(2);
 plan = planExport(store2.get());
 expect('다시 검증해 모두 일치면 재검증하지 않은 문장에서 빠지고 미해결도 풀린다', [plan.unchecked, plan.open.filter((v) => v.entry.claim.sentenceId === 2).length], [[], 0]);
+const checkedMd = reviewRecordMarkdown(store2.get(), plan, '2026-11-21 19:00');
+expect('검토 기록에는 고쳐 쓴 문장을 다시 검증한 결과를 근거의 인용문, 출처 주소, 확인일까지 적는다', [
+  checkedMd.includes('- 고쳐 쓴 문장을 다시 검증한 결과('),
+  checkedMd.includes('  1. [일치] 각석의 크기는 세로 211cm쯤입니다.\n     - 유형: 기타, 기준 시점: 현재\n     - 까닭: 사유\n     - 근거 1(지지): "발췌"\n       출처 1: 어느 기관, 1등급, 기관의 공식 안내, https://www.example.go.kr/a\n     - 확인일: 2026-11-21'),
+], [true, true]);
+const checkedJson = JSON.parse(JSON.stringify(reviewRecordJson(store2.get(), plan, '2026-11-21 19:00')))['문장별 기록'].find((s) => s['문장 번호'] === 2).재검증;
+expect('  JSON 기록에도 같은 내용을 담는다', [checkedJson.대상, checkedJson['이전 문장에 대한 결과'], checkedJson.결과[0].판정, checkedJson.결과[0].근거[0].출처.주소], ['고쳐 쓴 문장', false, '일치', 'https://www.example.go.kr/a']);
+// 원문도 다시 검증하던 때에 저장된 기록은 검토 기록에 적지 않는다(원문에는 처음 검증의 판정 하나만 둔다)
+const legacy = { ...base, rechecks: { 3: { token: 't', text: sentenceText(3), target: 'original', state: '완료', failure: '', claims: [], at: '2026-11-21T00:00:00.000Z' } } };
+const legacyPlan = planExport(legacy);
+expect('원문을 다시 검증한 예전 기록은 검토 기록에 적지 않는다', [reviewRecordMarkdown(legacy, legacyPlan, '2026-11-21 19:00').includes('다시 검증한 결과'), reviewRecordJson(legacy, legacyPlan, '2026-11-21 19:00')['문장별 기록'].every((s) => s.재검증 === null)], [false, true]);
 
 console.log('\n[검토 기록]');
 run = adopt(act(base, 2, { kind: 'save', text: '돌의 크기는 세로 211cm, 가로 123cm쯤입니다.' }), 2, 4, 7);
