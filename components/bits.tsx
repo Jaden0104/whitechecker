@@ -64,7 +64,7 @@ const PRIORITY_CLASS: Record<Priority, string> = { 상: 'high', 중: 'mid', 하:
 export function PriorityBadge({ priority }: { priority: Priority | null }) {
   if (!priority) return null;
   return (
-    <span className={`prio p-${PRIORITY_CLASS[priority]}`} title={`편집 우선순위 ${priority}`}>
+    <span className={`prio p-${PRIORITY_CLASS[priority]}`} title={`편집 우선순위 ${priority}: 틀렸을 때 글에 미치는 영향`}>
       <span className="visually-hidden">우선순위 </span>
       {priority}
     </span>

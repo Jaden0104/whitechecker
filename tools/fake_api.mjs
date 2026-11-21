@@ -14,8 +14,9 @@ export function makeStore() {
  * 흉내 낸 서버. claimsFor로 문장마다 낼 명제를, 나머지 옵션으로 판정과 수정안, 실패와 지연을 정한다.
  * calls에는 경로마다 받은 요청이 쌓인다.
  * @param reviseFor (문장, 고칠 내용) → { revised, edits, applied?, skipped? }. 주지 않으면 문장 끝에 '(고침)'을 붙인 수정안을 낸다
+ * @param priorityFor (명제) → 편집 우선순위. 주지 않으면 첫 문단은 '상', 나머지는 '중'이다
  */
-export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () => NO_FIX, evidenceFor = () => 1, reviseFor = null, delay = 0, fail = {} }) {
+export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () => NO_FIX, evidenceFor = () => 1, reviseFor = null, priorityFor = null, delay = 0, fail = {} }) {
   const calls = { extract: [], gather: [], judge: [], merge: [] };
   const usage = (stage, model = 'claude-sonnet-5.5') => ({ stage, model, promptTokens: 100, completionTokens: 10, searchCalls: 0, seconds: 0.1 });
   const wait = async (signal) => {
@@ -97,7 +98,7 @@ export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () =>
         lowered: null,
         reason: '사유',
         action: '',
-        priority: verdict === '일치' ? null : body.lead ? '상' : '중',
+        priority: verdict === '일치' ? null : priorityFor ? priorityFor(body.claim.statement) : body.lead ? '상' : '중',
         needChoice: false,
         flags: [],
         sources: used ? [{ sourceNo: 1, docType: '기관의 공식 안내', publisher: '어느 기관', ownFact: true, grade: 1, publisherUnlisted: false }] : [],

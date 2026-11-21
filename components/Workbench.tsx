@@ -4,12 +4,12 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createApi } from '@/lib/client/api';
 import { clearRecords, loadAccessCode, loadRun, saveAccessCode, saveRun } from '@/lib/client/storage';
-import { countClaims, entryOf, hasUnfinished, isAdopted, sentenceRows, staysDirect, viewOf, type RunState } from '@/lib/run/model';
+import { compareRows, countClaims, entryOf, hasUnfinished, isAdopted, sentenceRows, staysDirect, viewOf, type RunState } from '@/lib/run/model';
 import { createRechecker } from '@/lib/run/recheck';
 import { applyReview, type ReviewAction } from '@/lib/run/review';
 import { createRunner } from '@/lib/run/runner';
 import { ClaimDetail } from './ClaimDetail';
-import { ClaimTable, compareRows } from './ClaimTable';
+import { ClaimTable } from './ClaimTable';
 import { DirectList, directSentenceCount } from './DirectList';
 import { ExportPanel } from './ExportPanel';
 import { PaperView } from './PaperView';

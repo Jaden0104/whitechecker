@@ -5,6 +5,7 @@ import { diffPieces, editRanges, inlineRuns, quoteContext, sharedEnds } from '..
 import {
   candidateText,
   compareByRank,
+  compareRows,
   countClaims,
   entryOf,
   factNote,
@@ -309,10 +310,44 @@ console.log('\n[문장 단위로 보기]');
   expect("손볼 판정과 '일치'가 섞이면 '일치'는 표시에서 빼고 수만 센다", [row(4).badges, row(4).okCount, row(4).allOk], [[{ verdict: '불일치', count: 1 }], 1, false]);
   expect("모두 맞은 문장에만 '일치' 표시가 붙는다", [row(5).badges, row(5).allOk], [[{ verdict: '일치', count: 1 }], true]);
   expect('줄을 누르면 그 문장에서 가장 급한 명제를 연다', [row(3).top.entry.claim.id, row(4).top.entry.claim.id], ['s3-c1', 's4-c2']);
-  const order = [...rows].filter((r) => !r.allOk).sort((a, b) => compareByRank(a.top, b.top) || a.sentence.id - b.sentence.id);
+  const order = [...rows].filter((r) => !r.allOk).sort(compareRows);
   expect('줄의 자리는 가장 급한 명제를 따른다', order.map((r) => r.sentence.id), [3, 4]);
   expect('수정안은 세로만 고친다(가로는 근거 부족이라 그대로)', run.revisions[3].revision.revised, '크기는 세로 211cm, 가로 223cm입니다.');
   expect('사실마다 수정안에서 어떻게 됐는지 적는다', [factNote(run, row(3).views[0]).text, factNote(run, row(3).views[1]).text, factNote(run, row(4).views[0]).text], ['수정안에 반영했습니다', '확인하지 못해 그대로 뒀습니다', '고칠 것이 없습니다']);
+}
+
+// ---------- 판정표의 순서(F8) ----------
+console.log('\n[판정표의 순서]');
+{
+  // 가: 근거 부족·상, 나: 불일치·중, 다: 불일치·상, 라: 해석 주의·상, 마: 불일치·중과 근거 부족·상, 바: 일치
+  const text = '# 제목\n\n머리 문단입니다.\n\n가 문장입니다. 나 문장입니다. 다 문장입니다. 라 문장입니다. 마 문장은 두 가지입니다. 바 문장입니다.\n';
+  const table = {
+    '가 명제': ['근거 부족', '상'],
+    '나 명제': ['불일치', '중'],
+    '다 명제': ['불일치', '상'],
+    '라 명제': ['해석 주의', '상'],
+    '마 첫 명제': ['불일치', '중'],
+    '마 둘째 명제': ['근거 부족', '상'],
+    '바 명제': ['일치', null],
+  };
+  const api = makeApi({
+    claimsFor: (s) => (s.startsWith('마 ') ? [{ statement: '마 첫 명제' }, { statement: '마 둘째 명제' }] : /^[가나다라바] 문장/.test(s) ? [{ statement: `${s[0]} 명제` }] : []),
+    verdictFor: (st) => table[st][0],
+    priorityFor: (st) => table[st][1],
+  });
+  const store = makeStore();
+  const runner = createRunner(store, api);
+  runner.start(text);
+  await runner.idle();
+  const rows = sentenceRows(store.get());
+  const byText = (row) => row.sentence.plain[0];
+  expect('틀린 것으로 확인된 문장을 먼저, 그 안과 나머지에서는 편집 우선순위가 높은 것부터 보인다', [...rows].filter((r) => !r.allOk).sort(compareRows).map(byText), ['다', '마', '나', '가', '라']);
+  const mixed = rows.find((r) => byText(r) === '마');
+  expect('문장의 편집 우선순위는 손볼 명제들 가운데 가장 높은 값이다', [mixed.priority, mixed.badges.map((b) => b.verdict)], ['상', ['불일치', '근거 부족']]);
+  expect('줄을 누르면 틀린 것으로 확인된 명제를 먼저 연다', mixed.top.entry.claim.statement, '마 첫 명제');
+  expect('모두 맞은 문장에는 편집 우선순위가 없다', rows.find((r) => byText(r) === '바').priority, null);
+  const views = rows.flatMap((r) => r.views).filter((v) => v.verdict !== '일치');
+  expect('명제끼리도 불일치가 먼저다(불일치·중이 근거 부족·상보다 앞)', [...views].sort(compareByRank).map((v) => v.entry.claim.statement), ['다 명제', '나 명제', '마 첫 명제', '가 명제', '마 둘째 명제', '라 명제']);
 }
 
 // ---------- 8. 편집자의 선택(F10) ----------

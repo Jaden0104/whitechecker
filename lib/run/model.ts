@@ -1,7 +1,7 @@
 // 화면이 맡는 진행(PRD 7장 '화면이 진행을 맡는다')의 자료 모양과, 그 자료를 읽는 함수들.
 // 처리 상태, 사실 판정, 실패 사유를 따로 둔다(F16). 처리에 실패한 것을 '근거 부족'으로 보이지 않기 위해서다.
 import { citedSourceName, type SentenceClaim } from '../merge/plan.ts';
-import type { Claim, ClaimType, EvidenceBundle, Judgment, Sentence, SentenceRevision, Usage, Verdict } from '../types.ts';
+import type { Claim, ClaimType, EvidenceBundle, Judgment, Priority, Sentence, SentenceRevision, Usage, Verdict } from '../types.ts';
 
 export type ItemState = '대기' | '진행 중' | '완료' | '실패' | '중단';
 export type Step = '' | '근거 모으기' | '판정';
@@ -263,12 +263,16 @@ export function recover(run: RunState): RunState {
 const PRIORITY_ORDER: Record<string, number> = { 상: 0, 중: 1, 하: 2 };
 const VERDICT_ORDER: Record<Verdict, number> = { 불일치: 0, '근거 부족': 1, '해석 주의': 2, '직접 확인': 3, 일치: 4 };
 
-/** 보이는 순서(F8): 편집 우선순위가 높은 것부터, 같은 우선순위 안에서는 불일치, 근거 부족, 해석 주의 순. 끝나지 않은 것은 맨 뒤 */
+/**
+ * 보이는 순서(F8). 틀린 것으로 확인된 것(불일치)을 먼저 보인다. 자리와 상관없이 반드시 고쳐야 하기 때문이다.
+ * 그 안에서, 그리고 나머지(근거 부족, 해석 주의)에서는 편집 우선순위가 높은 것부터 보인다. 끝나지 않은 것은 맨 뒤다.
+ * 편집 우선순위(상·중·하)는 판정과 따로 매기는 값으로, 틀렸을 때 글에 미치는 영향을 뜻한다(5.4절).
+ */
 export function compareByRank(a: ClaimView, b: ClaimView): number {
-  const rank = (v: ClaimView) => [PRIORITY_ORDER[v.judgment?.priority ?? ''] ?? 3, v.verdict ? VERDICT_ORDER[v.verdict] : 5];
-  const [pa, va] = rank(a);
-  const [pb, vb] = rank(b);
-  return pa - pb || va - vb;
+  const rank = (v: ClaimView) => [v.verdict === '불일치' ? 0 : 1, PRIORITY_ORDER[v.judgment?.priority ?? ''] ?? 3, v.verdict ? VERDICT_ORDER[v.verdict] : 5];
+  const ra = rank(a);
+  const rb = rank(b);
+  return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
 }
 
 /** '직접 확인'으로 남는 명제인지. 찾아보니 자료가 있어 판정이 난 것은 아니다 */
@@ -283,6 +287,8 @@ export interface SentenceRow {
   top: ClaimView;
   /** 줄에 올릴 판정 표시. 손봐야 할 판정을 급한 순서로 적고, 손볼 것이 없으면 '일치' 하나만 적는다 */
   badges: Array<{ verdict: Verdict; count: number }>;
+  /** 이 문장의 편집 우선순위. 손봐야 할 명제들 가운데 가장 높은 값이다. 손볼 것이 없으면 null */
+  priority: Priority | null;
   /** '일치'로 끝난 명제 수 */
   okCount: number;
   /** 처리가 끝나지 않은 명제 */
@@ -312,9 +318,29 @@ export function sentenceRows(run: RunState): SentenceRow[] {
     }
     const allOk = pending.length === 0 && warned.length === 0;
     if (allOk) badges.push({ verdict: '일치', count: 1 });
-    rows.push({ sentence, views, top: warned[0] ?? pending[0] ?? views[0], badges, okCount, pending, allOk });
+    const priority =
+      warned
+        .map((v) => v.judgment?.priority ?? null)
+        .filter((p): p is Priority => p !== null)
+        .sort((x, y) => PRIORITY_ORDER[x] - PRIORITY_ORDER[y])[0] ?? null;
+    rows.push({ sentence, views, top: warned[0] ?? pending[0] ?? views[0], badges, priority, okCount, pending, allOk });
   }
   return rows;
+}
+
+/**
+ * 판정표의 줄 순서. 불일치가 난 문장을 먼저 두고, 그 안과 나머지에서는 그 문장의 편집 우선순위가 높은 것부터,
+ * 같으면 가장 무거운 판정(근거 부족, 해석 주의) 순, 그래도 같으면 원고 순서로 둔다
+ */
+export function compareRows(a: SentenceRow, b: SentenceRow): number {
+  const rank = (row: SentenceRow) => [
+    row.badges.some((x) => x.verdict === '불일치') ? 0 : 1,
+    PRIORITY_ORDER[row.priority ?? ''] ?? 3,
+    row.badges[0] ? VERDICT_ORDER[row.badges[0].verdict] : 5,
+  ];
+  const ra = rank(a);
+  const rb = rank(b);
+  return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2] || a.sentence.id - b.sentence.id;
 }
 
 const NO_REVIEW: ReviewEntry = { choice: '', edited: null, at: '' };

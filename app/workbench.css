@@ -118,6 +118,8 @@
 .fold::after { content: "펼치기 ▾"; margin-left: auto; font-weight: 500; color: var(--ink-3); font-size: 12.5px; }
 .fold[aria-expanded="true"]::after { content: "접기 ▴"; }
 .hint-row { padding: 28px 20px; color: var(--ink-3); font-size: 14px; text-align: center; }
+/* 판정표의 순서와 상·중·하의 뜻을 한 줄로 알린다 */
+.list-note { margin: 0; padding: 7px 16px; border-bottom: 1px solid var(--line); background: #fafbfc; color: var(--ink-3); font-size: 12.5px; }
 
 /* ---------- 상세 ---------- */
 .detail, .export { max-width: 860px; }

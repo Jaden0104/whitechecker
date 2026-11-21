@@ -1,16 +1,11 @@
-// 판정표(F8): 한 줄이 문장 하나다. 편집 우선순위가 높은 것부터 보이고, 모두 '일치'인 문장은 접어 둔다.
+// 판정표(F8): 한 줄이 문장 하나다. 틀린 것으로 확인된 문장을 먼저, 그다음 편집 우선순위가 높은 것부터 보이고, 모두 '일치'인 문장은 접어 둔다.
 // 판정별로 골라 보고 원고 순서로 바꿔 볼 수 있다. 어느 사실이 어느 판정인지는 줄을 눌러 상세에서 본다.
 import { useState } from 'react';
-import { candidateText, compareByRank, reviewOf, type RunState, type SentenceRow } from '@/lib/run/model';
+import { candidateText, compareRows, reviewOf, type RunState, type SentenceRow } from '@/lib/run/model';
 import type { Verdict } from '@/lib/types';
 import { DecisionChip, InlineText, PriorityBadge, StateBadge, VerdictBadge } from './bits';
 
 type Filter = '전체' | '불일치' | '해석 주의' | '근거 부족' | '일치' | '미완료';
-
-/** 줄의 순서: 그 문장에서 가장 급한 명제를 따르고, 같으면 원고 순서 */
-export function compareRows(a: SentenceRow, b: SentenceRow): number {
-  return compareByRank(a.top, b.top) || a.sentence.id - b.sentence.id;
-}
 
 /** 손봐야 할 판정이 하나라도 나온 문장인지 */
 const warned = (row: SentenceRow) => row.badges.some((b) => b.verdict !== '일치');
@@ -53,7 +48,7 @@ function Row({ run, row, current, onSelect }: { run: RunState; row: SentenceRow;
     <li>
       <button type="button" className={done.length === 0 ? 'row pending' : 'row'} aria-current={current} onClick={() => onSelect(top.entry.claim.id)}>
         <div className="head">
-          <PriorityBadge priority={top.judgment?.priority ?? null} />
+          <PriorityBadge priority={row.priority} />
           {badges.map((b) => (
             <VerdictBadge key={b.verdict} verdict={b.verdict} count={b.count} />
           ))}
@@ -96,7 +91,7 @@ export function ClaimTable({ run, rows, running, extracting, selectedSentence, o
   if (!sorted || filter !== '전체') {
     body = (sorted ? [...list].sort(compareRows) : list).map(item);
   } else {
-    // 손볼 판정이 난 문장을 급한 순서로, 그다음 아직 판정이 없는 문장, 모두 '일치'인 문장은 접어서 맨 아래에
+    // 틀린 것으로 확인된 문장, 확인하지 못한 문장(영향이 큰 순), 아직 판정이 없는 문장 순. 모두 '일치'인 문장은 접어서 맨 아래에
     const first = list.filter(warned).sort(compareRows);
     const later = list.filter((row) => !warned(row) && !row.allOk);
     const ok = list.filter((row) => row.allOk);
@@ -132,11 +127,14 @@ export function ClaimTable({ run, rows, running, extracting, selectedSentence, o
         )}
         {!running && (
           <button type="button" className="sort" onClick={() => setByPriority((v) => !v)}>
-            {byPriority ? '우선순위순 ▾' : '원고순 ▾'}
+            {byPriority ? '확인된 오류부터 ▾' : '원고순 ▾'}
           </button>
         )}
       </div>
       <div className="scroll">
+        {sorted && filter === '전체' && rows.length > 0 && (
+          <p className="list-note">틀린 것으로 확인된 문장을 먼저 보입니다. 상·중·하는 틀렸을 때 글에 미치는 영향입니다.</p>
+        )}
         {rows.length === 0 ? (
           <p className="hint-row">{extracting ? '원고에서 확인할 명제를 뽑고 있습니다.' : '판정표에 올릴 문장이 없습니다.'}</p>
         ) : list.length === 0 ? (
