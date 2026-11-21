@@ -1,6 +1,18 @@
 // 한 문장에 연결된 명제들을 보고, 수정안을 만들 때가 됐는지와 무엇을 합칠지를 정한다(PRD F7).
 // Liner를 부르지 않는다. 화면이 [수정안 합치기]를 요청하기 전에 쓴다.
-import type { Fix, MergeFix, Verdict } from '../types.ts';
+import type { Fix, MergeFix, SourceInfo, SourceRating, Verdict } from '../types.ts';
+
+/**
+ * 인용형 수정안에서 밝힐 출처의 이름. 판정이 가리킨 출처, 곧 실제로 열어 보고 등급을 매긴 자료의 이름이다.
+ * 검증 기준 파일의 기관 목록에 있는 이름을 먼저 쓰고, 없으면 판정이 적은 발행 주체, 그것도 없으면 사이트 주소를 쓴다.
+ * 판정이 고칠 내용에 다른 이름을 적었더라도 이 이름을 쓴다. 확인한 출처만 밝히기 위해서다.
+ */
+export function citedSourceName(fix: Fix | null, ratings: SourceRating[], sources: SourceInfo[]): string {
+  if (!fix || fix.kind !== '인용형' || fix.sourceNo === null) return '';
+  const info = sources.find((s) => s.no === fix.sourceNo);
+  const rating = ratings.find((r) => r.sourceNo === fix.sourceNo);
+  return info?.publisherHint || rating?.publisher || info?.hostname.replace(/^www\./, '') || '';
+}
 
 /** 문장에 연결된 명제 하나의 지금 상태 */
 export interface SentenceClaim {

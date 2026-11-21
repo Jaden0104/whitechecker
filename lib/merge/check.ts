@@ -307,6 +307,14 @@ export function reviewRevision(source: string, revised: string, fixes: MergeFix[
     if (invented.length > 0) cautions.push(`고칠 내용에 적히지 않은 낱말이 들어갔다: ${invented.join(', ')}`);
   }
 
+  // 인용형은 실제로 열어 확인한 출처의 이름을 밝혀야 한다. 그 이름이 수정안에 없으면 알린다
+  const tight = (text: string) => text.replace(/\s+/g, '');
+  for (const f of fixes) {
+    if (f.kind !== '인용형') continue;
+    if (!f.sourceName) cautions.push('인용형인데 밝힐 출처의 이름이 없다');
+    else if (!tight(revised).includes(tight(f.sourceName))) cautions.push(`밝힐 출처(${f.sourceName})의 이름이 수정안에 없다`);
+  }
+
   const a = markupSignature(source);
   const b = markupSignature(revised);
   const markupKept = a.length === b.length && a.every((mark, i) => mark === b[i]);

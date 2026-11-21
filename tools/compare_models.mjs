@@ -11,7 +11,7 @@ import { buildExtractChunks } from '../lib/chunks.ts';
 import { applyRules } from '../lib/judge/rules.ts';
 import { LIMITS } from '../lib/limits.ts';
 import { chatJson, newBudget } from '../lib/liner.ts';
-import { planMerge } from '../lib/merge/plan.ts';
+import { citedSourceName, planMerge } from '../lib/merge/plan.ts';
 import { buildRevision } from '../lib/merge/run.ts';
 import { totalCost } from '../lib/pricing.ts';
 import { EXTRACT_SCHEMA, EXTRACT_SYSTEM, extractUserMessage } from '../lib/prompts/extract.ts';
@@ -205,6 +205,8 @@ async function runMerge(strategy) {
   }
   const allClaims = JSON.parse(readFileSync(claimsFile, 'utf8'));
   const judged = new Map(JSON.parse(readFileSync(judgeFile, 'utf8')).map((r) => [r.claim.id, r]));
+  const gatherFile = `tools/.cache/gather-${tag}.json`;
+  const gathered = new Map((existsSync(gatherFile) ? JSON.parse(readFileSync(gatherFile, 'utf8')) : []).map((r) => [r.claim.id, r]));
   const squeeze = (s) => s.replace(/\s+/g, '');
   const hasAny = (haystack, option) => option.split('|').some((o) => squeeze(haystack).includes(squeeze(o)));
   const usages = [];
@@ -219,7 +221,7 @@ async function runMerge(strategy) {
         if (!c.isPublic) return { claimId: c.id, statement: c.statement, state: '완료', verdict: '직접 확인', fix: null, sourceName: '' };
         const j = judged.get(c.id)?.judgment;
         return j
-          ? { claimId: c.id, statement: c.statement, state: '완료', verdict: j.verdict, fix: j.fix, sourceName: '' }
+          ? { claimId: c.id, statement: c.statement, state: '완료', verdict: j.verdict, fix: j.fix, sourceName: citedSourceName(j.fix, j.sources, gathered.get(c.id)?.bundle?.sources ?? []) }
           : { claimId: c.id, statement: c.statement, state: '실패', verdict: null, fix: null, sourceName: '' };
       });
     const plan = planMerge(linked);

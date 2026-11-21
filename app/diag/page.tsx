@@ -45,7 +45,7 @@ export default function DiagPage() {
   }
 
   return (
-    <main>
+    <main className="diag">
       <h1>원문 수집 시험</h1>
       <p className="muted">
         이 서버에서 공공기관, 백과, 논문, 위키 12곳을 열어 본문에 기대한 구절이 있는지 확인합니다. 앱의 이름을 밝히고 열며,

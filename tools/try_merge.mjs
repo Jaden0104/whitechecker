@@ -5,7 +5,7 @@
 // 접속 코드는 환경 변수 ACCESS_CODE에서 읽는다(화면에 찍지 않는다).
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { planMerge, unresolvedAfter } from '../lib/merge/plan.ts';
+import { citedSourceName, planMerge, unresolvedAfter } from '../lib/merge/plan.ts';
 import { totalCost } from '../lib/pricing.ts';
 import { splitManuscript } from '../lib/sentences.ts';
 
@@ -34,12 +34,9 @@ const gathered = new Map(JSON.parse(readFileSync(gatherFile, 'utf8')).map((r) =>
 const judged = new Map(JSON.parse(readFileSync(judgeFile, 'utf8')).map((r) => [r.claim.id, r]));
 const answers = existsSync(answersPath) ? JSON.parse(readFileSync(answersPath, 'utf8')).명제 : [];
 
-/** 인용형에서 밝힐 출처의 이름: 판정이 적은 발행 주체, 없으면 도메인 */
-function sourceNameOf(claimId, sourceNo) {
-  if (!sourceNo) return '';
-  const rating = judged.get(claimId)?.judgment?.sources?.find((s) => s.sourceNo === sourceNo);
-  const info = gathered.get(claimId)?.bundle?.sources?.find((s) => s.no === sourceNo);
-  return rating?.publisher || info?.publisherHint || info?.hostname || '';
+/** 인용형에서 밝힐 출처의 이름: 실제로 열어 보고 등급을 매긴 출처의 이름(화면도 같은 함수를 쓴다) */
+function sourceNameOf(claimId, fix) {
+  return citedSourceName(fix, judged.get(claimId)?.judgment?.sources ?? [], gathered.get(claimId)?.bundle?.sources ?? []);
 }
 
 /** 문장에 연결된 명제의 상태. 화면이 하게 될 일을 여기서 흉내 낸다 */
@@ -50,7 +47,7 @@ function claimsOf(sentence) {
       if (!c.isPublic) return { claimId: c.id, statement: c.statement, state: '완료', verdict: '직접 확인', fix: null, sourceName: '' };
       const j = judged.get(c.id)?.judgment;
       if (!j) return { claimId: c.id, statement: c.statement, state: '실패', verdict: null, fix: null, sourceName: '' };
-      return { claimId: c.id, statement: c.statement, state: '완료', verdict: j.verdict, fix: j.fix, sourceName: sourceNameOf(c.id, j.fix?.sourceNo) };
+      return { claimId: c.id, statement: c.statement, state: '완료', verdict: j.verdict, fix: j.fix, sourceName: sourceNameOf(c.id, j.fix) };
     });
 }
 

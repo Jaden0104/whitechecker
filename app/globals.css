@@ -1,62 +1,117 @@
+/* 색과 글자: 흰 바탕, 먹색 글씨, 남색 포인트. 색은 판정을 알리는 데만 쓴다(2026-11-21에 정한 방향) */
 :root {
-  --text: #1c1c1c;
-  --muted: #666;
-  --line: #d9d9d9;
-  --ok: #1a7f37;
-  --bad: #c62828;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --ink: #17202b;
+  --ink-2: #4a5565;
+  --ink-3: #7b8594;
+  --line: #e3e6eb;
+  --line-strong: #cdd3db;
+  --accent: #1f3f6e;
+  --accent-strong: #17325a;
+  --accent-soft: #eaf0f8;
+  --focus: #3b74c5;
+
+  --bad: #b3261e;
+  --bad-soft: #fcebea;
+  --caution: #a85a00;
+  --caution-soft: #fff3e0;
+  --unknown: #4d5b6b;
+  --unknown-soft: #eef1f4;
+  --ok: #1b6e3a;
+  --ok-soft: #e6f4ea;
+  --direct: #5a45b8;
+  --direct-soft: #efebfb;
+
+  --del-bg: #fde7e5;
+  --del-ink: #9a1f18;
+  --ins-bg: #ddf3e3;
+  --ins-ink: #145c2f;
+  --mark: #fff1b8;
+
+  --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, 'D2Coding', monospace;
+  --radius: 10px;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
-  margin: 0;
-  background: #fff;
-  color: var(--text);
-  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
+  height: 100%;
 }
 
-main {
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ---------- 원문 수집 시험 화면(/diag) ---------- */
+.diag {
   max-width: 960px;
   margin: 0 auto;
   padding: 24px 16px 64px;
 }
 
-h1 {
+.diag h1 {
   font-size: 22px;
   margin: 0 0 8px;
 }
 
-p {
+.diag p {
   margin: 8px 0;
 }
 
-table {
+.diag table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 16px;
   font-size: 14px;
 }
 
-th,
-td {
+.diag th,
+.diag td {
   border-bottom: 1px solid var(--line);
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
 }
 
-input,
-button {
+.diag input,
+.diag button {
   font: inherit;
   padding: 6px 10px;
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--ink-3);
 }
 
 .ok {

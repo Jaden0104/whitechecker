@@ -284,7 +284,9 @@ export function applyRules(input: RuleInput): Judgment {
       if (named === undefined) {
         fix = NO_FIX;
       } else {
-        const name = ratingOf(named)?.publisher || sourceByNo.get(named)?.hostname || '';
+        // 수정안에 밝힐 이름과 같은 순서로 고른다(lib/merge/plan.ts의 citedSourceName): 기관 목록의 이름, 판정이 적은 발행 주체, 사이트 주소
+        const info = sourceByNo.get(named);
+        const name = info?.publisherHint || ratingOf(named)?.publisher || info?.hostname.replace(/^www\./, '') || '';
         const detail = fromSupport === undefined && fix.kind === '교정안' && fix.instruction ? ` 그 출처의 내용: ${fix.instruction}` : '';
         fix = { kind: '인용형', instruction: `출처(${name})의 설명임을 밝혀 쓴다.${detail}`.slice(0, 200), sourceNo: named };
       }

@@ -1,14 +1,19 @@
-import Link from 'next/link';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import type { Sample } from '@/components/StartScreen';
+import Workbench from '@/components/Workbench';
+import './workbench.css';
+
+/** 시작 화면에서 불러올 수 있는 가상 원고. 일부러 틀린 곳을 심어 둔 시험용 글이다 */
+function loadSamples(): Sample[] {
+  try {
+    const text = readFileSync(path.join(process.cwd(), 'fixtures', 'small', 'manuscript.md'), 'utf8');
+    return [{ id: 'small', label: '돌에 새긴 하늘, 천상열차분야지도', text }];
+  } catch {
+    return [];
+  }
+}
 
 export default function HomePage() {
-  return (
-    <main>
-      <h1>화이트체커</h1>
-      <p>발행 전 원고의 사실 취약점을 먼저 찾아 주는 팩트체크 에이전트입니다.</p>
-      <p className="muted">검증 화면은 만드는 중입니다. 지금은 원문 수집 시험만 열려 있습니다.</p>
-      <p>
-        <Link href="/diag">원문 수집 시험</Link>
-      </p>
-    </main>
-  );
+  return <Workbench samples={loadSamples()} />;
 }

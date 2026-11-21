@@ -2,7 +2,7 @@
 // 모델이 바꿀 대목을 이렇게 냈다고 치고, 코드가 문장을 어떻게 만들고 무엇을 알리는지를 본다.
 // 사용: node tools/check_merge.mjs
 import { acceptPolish, applyEdits, compareRevision, markupSignature, numbersIn, removalOnly, reviewRevision } from '../lib/merge/check.ts';
-import { planMerge, unresolvedAfter } from '../lib/merge/plan.ts';
+import { citedSourceName, planMerge, unresolvedAfter } from '../lib/merge/plan.ts';
 import { settlePolish } from '../lib/merge/polish.ts';
 import { buildRevision, withPolish } from '../lib/merge/run.ts';
 
@@ -111,6 +111,22 @@ review = reviewRevision(quote, '이 천문도는 "하늘의 뜻을 돌에 옮긴
 expect('출처 없이 흐리는 말이 들어가면 알린다', review.cautions[0], '출처를 밝히지 않고 흐리는 말이 들어갔다: 알려져 있');
 review = reviewRevision(most, '국립고궁박물관의 설명에 따르면 이 각석은 세계에서 두 번째로 오래된 석각 천문도라고 한다.', [fix('a', '인용형', '국립고궁박물관의 설명임을 밝혀 쓴다', '국립고궁박물관')], HEDGES);
 expect('출처를 밝힌 인용형에서는 낱말과 흐리는 말을 알리지 않는다', review.cautions, []);
+
+console.log('\n[인용형에 밝힐 출처]');
+const cite = { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', sourceNo: 2 };
+const rated = [{ sourceNo: 2, docType: '백과사전', publisher: '한국민족문화대백과', ownFact: false, grade: 2, publisherUnlisted: false }];
+const opened = [{ no: 2, hostname: 'encykorea.aks.ac.kr', publisherHint: '한국학중앙연구원' }];
+expect('기관 목록에 있는 이름을 먼저 쓴다', citedSourceName(cite, rated, opened), '한국학중앙연구원');
+expect('목록에 없으면 판정이 적은 발행 주체를 쓴다', citedSourceName(cite, rated, [{ ...opened[0], publisherHint: '' }]), '한국민족문화대백과');
+expect('그것도 없으면 사이트 주소를 쓴다', citedSourceName(cite, [], [{ no: 2, hostname: 'www.example.or.kr', publisherHint: '' }]), 'example.or.kr');
+expect('인용형이 아니면 이름을 두지 않는다', citedSourceName({ kind: '교정안', instruction: '고친다', sourceNo: null }, rated, opened), '');
+const citeFix = [fix('a', '인용형', '이 출처의 설명임을 밝혀 쓴다', '한국학중앙연구원')];
+review = reviewRevision(most, '한국학중앙연구원에 따르면 이 각석은 세계에서 가장 오래된 석각 천문도입니다.', citeFix, HEDGES);
+expect('밝힐 출처의 이름이 수정안에 있으면 알리지 않는다', review.cautions, []);
+review = reviewRevision(most, '권근의 도설에 따르면 이 각석은 세계에서 가장 오래된 석각 천문도입니다.', citeFix, HEDGES);
+expect('다른 이름으로 출처를 밝히면 알린다', review.cautions, ['밝힐 출처(한국학중앙연구원)의 이름이 수정안에 없다']);
+review = reviewRevision(most, '출처에 따르면 이 각석은 세계에서 가장 오래된 석각 천문도입니다.', [fix('a', '인용형', '이 출처의 설명임을 밝혀 쓴다', '')], HEDGES);
+expect('밝힐 출처의 이름을 받지 못했으면 알린다', review.cautions, ['인용형인데 밝힐 출처의 이름이 없다']);
 
 console.log('\n[합칠 때를 정하기]');
 const done = (claimId, verdict, kind = '없음', instruction = '') => ({ claimId, statement: claimId, state: '완료', verdict, fix: { kind, instruction, sourceNo: null }, sourceName: '' });
