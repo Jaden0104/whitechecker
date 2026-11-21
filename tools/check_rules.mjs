@@ -163,5 +163,46 @@ j = run('운영 정보', '박물관은 09:30부터 문을 연다', {
 });
 expect('블로그 플랫폼의 글은 공식 안내라고 해도 3등급', `${j.verdict}/${j.sources[0].grade}`, '근거 부족/3');
 
+j = run('인용·출처 귀속', '한 학자가 "하늘의 뜻을 돌에 옮긴 것"이라고 썼다', model('근거 부족', [ev(2, '판단 불충분', '1395년(태조 4)에 만든')], { fix: { kind: '축소안', instruction: '인용을 뺀다', source_no: 0 } }));
+expect('판단에 쓸 근거가 하나도 없으면 축소안을 두지 않는다', `${j.verdict}/${j.fix.kind}`, '근거 부족/없음');
+j = run('최상급', '각석은 세계에서 가장 오래된 천문도다', model('해석 주의', [ev(2, '반박', '세계에서 두 번째로 오래된')], { fix: { kind: '축소안', instruction: "'세계에서 가장'을 뺀다", source_no: 0 } }));
+expect('확인한 근거가 있으면 축소안을 둔다', `${j.verdict}/${j.fix.kind}`, '해석 주의/축소안');
+j = run(
+  '최상급',
+  '각석은 세계에서 가장 오래된 천문도다',
+  model('해석 주의', [ev(2, '판단 불충분', '1395년(태조 4)에 만든', { scope: '적용 불가' })], {
+    qualifiers: [{ text: '가장', result: '출처와 다르다', note: '' }],
+    fix: { kind: '축소안', instruction: "'세계에서 가장'을 뺀다", source_no: 0 },
+  }),
+);
+expect('같은 대상의 근거가 있고 한정 표현이 출처와 맞지 않으면 축소안을 둔다', `${j.verdict}/${j.fix.kind}`, '해석 주의/축소안');
+
+console.log('\n[인용문의 근거 번호 바로잡기]');
+// 같은 출처(1번)의 발췌가 둘이다: 근거 1은 크기, 근거 7은 관람 시간
+const twoExcerpts = {
+  ...bundleOf([]),
+  evidence: [
+    { no: 1, sourceNo: 1, text: '크기(cm)\n세로: 211㎝, 가로: 123㎝' },
+    { no: 7, sourceNo: 1, text: '관람 시간 | 09:30 ~ 17:30' },
+    { no: 4, sourceNo: 4, text: TEXTS[4] },
+  ],
+};
+const official = [{ source_no: 1, doc_type: '기관의 공식 안내', publisher: '국립고궁박물관', own_fact: true }];
+const hours = { statement: '박물관은 09:30부터 17:30까지 문을 연다', type: '운영 정보', lead: false };
+j = applyRules({ claim: hours, bundle: twoExcerpts, model: { ...model('일치', [ev(1, '지지', '09:30 ~ 17:30')]), sources: official }, sentenceKey: 'k' });
+expect('같은 출처의 다른 발췌에 있는 구절이면 근거 번호를 바로잡고 쓴다', `${j.verdict}/${j.evidence[0].evidenceNo}/${j.evidence[0].correctedFrom}`, '일치/7/1');
+expect('  바로잡은 근거는 인용문이 있는 것으로 본다', j.evidence[0].quoteFound, true);
+j = applyRules({ claim: hours, bundle: twoExcerpts, model: { ...model('일치', [ev(1, '지지', '오전 10시부터 오후 6시까지')]), sources: official }, sentenceKey: 'k' });
+expect('다른 출처의 발췌에만 있는 구절은 바로잡지 않는다', `${j.verdict}/${j.lowered?.rule}/${j.evidence[0].evidenceNo}`, '근거 부족/1번/1');
+j = applyRules({
+  claim: hours,
+  bundle: twoExcerpts,
+  model: { ...model('일치', [ev(7, '지지', '09:30 ~ 17:30'), ev(1, '지지', '관람 시간')]), sources: official },
+  sentenceKey: 'k',
+});
+expect('바로잡을 번호가 이미 쓰였으면 그대로 두고 인용문 없음으로 남긴다', j.evidence.map((u) => `${u.evidenceNo}:${u.quoteFound}`).join(), '7:true,1:false');
+j = applyRules({ claim: hours, bundle: twoExcerpts, model: { ...model('일치', [ev(7, '지지', '09:30 ~ 17:30')]), sources: official }, sentenceKey: 'k' });
+expect('번호가 맞으면 바로잡은 기록을 남기지 않는다', j.evidence[0].correctedFrom, undefined);
+
 console.log(failed ? `\n실패 ${failed}건` : '\n모두 통과');
 process.exit(failed ? 1 : 0);

@@ -126,6 +126,10 @@ export async function chatJson<T>(opts: ChatOptions): Promise<{ value: T; usage:
     },
   };
   if (opts.routingStrategy) body.routing_strategy = opts.routingStrategy;
+  // 프롬프트 캐시를 켠다. Liner의 Claude 라우터는 이 값이 비어 있지 않을 때만 캐시를 쓴다(값 자체는 모델에 가지 않는다).
+  // 지시문과 출력 형식은 단계마다 늘 같아서, 같은 단계를 5분 안에 잇달아 부르면 그 부분을 캐시에서 싸게 읽는다.
+  // 처음 부를 때는 캐시에 쓰는 값이 붙어 조금 더 든다(2026-11-21 확인: 판정 지시문 약 7,200토큰이 두 번째 호출부터 캐시에서 읽혔다)
+  body.prompt_cache_key = `whitechecker-${opts.schemaName}`;
 
   const { data, seconds } = await post('/chat/completions', body, opts.key, opts.budget);
   const choice = data?.choices?.[0];
@@ -134,6 +138,7 @@ export async function chatJson<T>(opts: ChatOptions): Promise<{ value: T; usage:
     model: String(data?.model ?? ''),
     promptTokens: Number(data?.usage?.prompt_tokens ?? 0),
     cachedTokens: Number(data?.usage?.prompt_tokens_details?.cached_tokens ?? 0),
+    cacheWriteTokens: Number(data?.usage?.prompt_tokens_details?.cache_write_tokens ?? 0),
     completionTokens: Number(data?.usage?.completion_tokens ?? 0),
     searchCalls: 0,
     seconds: Math.round(seconds * 10) / 10,

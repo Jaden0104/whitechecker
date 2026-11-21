@@ -108,11 +108,24 @@ export function applyRules(input: RuleInput): Judgment {
   // 1번, 4번, 5번: 인용문이 그 번호의 발췌에 있어야 하고, 대상·범위·시점이 모두 적용 가능해야 판정에 쓴다
   const evidence: EvidenceUse[] = [];
   for (const e of model.evidence ?? []) {
-    const item = evidenceByNo.get(e.evidence_no);
-    if (!item || evidence.some((u) => u.evidenceNo === item.no)) continue;
+    const cited = evidenceByNo.get(e.evidence_no);
+    if (!cited) continue;
     const quote = short(e.quote, 300);
     const squeezed = squeezeQuote(quote);
-    const quoteFound = squeezed.length >= 2 && squeezeQuote(item.text).includes(squeezed);
+    let item = cited;
+    let quoteFound = squeezed.length >= 2 && squeezeQuote(cited.text).includes(squeezed);
+    if (!quoteFound && squeezed.length >= 2) {
+      // 모델이 같은 출처의 다른 발췌에 있는 구절을 옮기며 근거 번호를 잘못 적는 일이 있다.
+      // 그 구절이 같은 출처의 다른 발췌에 그대로 있으면 번호를 그 발췌로 바로잡는다. 다른 출처의 발췌는 찾지 않는다
+      const other = bundle.evidence.find(
+        (x) => x.sourceNo === cited.sourceNo && x.no !== cited.no && squeezeQuote(x.text).includes(squeezed) && !evidence.some((u) => u.evidenceNo === x.no),
+      );
+      if (other) {
+        item = other;
+        quoteFound = true;
+      }
+    }
+    if (evidence.some((u) => u.evidenceNo === item.no)) continue;
     const relation = pick(e.relation, RELATIONS, '판단 불충분');
     const target = pick(e.target, APPLICABILITY, '미확인');
     const scope = pick(e.scope, APPLICABILITY, '미확인');
@@ -127,6 +140,7 @@ export function applyRules(input: RuleInput): Judgment {
       time,
       quote,
       quoteFound,
+      ...(item.no !== cited.no ? { correctedFrom: cited.no } : {}),
       usable: quoteFound && applicable && relation !== '판단 불충분',
     });
   }
@@ -241,6 +255,17 @@ export function applyRules(input: RuleInput): Judgment {
   }
   const unresolved = conflict.found && !conflict.resolved;
 
+  const qualifiers: QualifierCheck[] = (model.qualifiers ?? [])
+    .map((q) => ({ text: short(q.text, 40), result: pick(q.result, QUALIFIER_RESULTS, '확인하지 못했다'), note: short(q.note, 160) }))
+    .filter((q) => q.text);
+
+  // 축소안은 일부를 확인했을 때 나머지를 빼는 것이다. 아래 둘 가운데 하나여야 확인한 부분이 있다고 본다.
+  // - 판단에 쓸 수 있는 근거가 있다
+  // - 같은 대상을 다룬 근거가 있고, 한정 표현이 출처와 맞지 않는다(그 한정 표현을 빼면 된다)
+  const sameTarget = evidence.some((u) => u.quoteFound && u.target === '적용 가능');
+  const looseQualifier = qualifiers.some((q) => q.result !== '출처와 같다');
+  const partlyConfirmed = evidence.some((u) => u.usable) || (sameTarget && looseQualifier);
+
   // 수정 방향(F7): 교정안은 '불일치'일 때만, 인용형은 2등급 이상의 출처일 때만 둔다
   let fix: Fix = {
     kind: pick(model.fix?.kind, FIX_KINDS, '없음'),
@@ -268,6 +293,8 @@ export function applyRules(input: RuleInput): Judgment {
     fix = NO_FIX;
   } else if (fix.kind === '인용형' && (fix.sourceNo === null || gradeOf(fix.sourceNo) > 2)) {
     fix = NO_FIX;
+  } else if (fix.kind === '축소안' && !partlyConfirmed) {
+    fix = NO_FIX;
   } else if (fix.kind === '없음') {
     fix = NO_FIX;
   }
@@ -281,10 +308,6 @@ export function applyRules(input: RuleInput): Judgment {
 
   const used = new Set([...support, ...refute]);
   if (sources.some((s) => s.publisherUnlisted && used.has(s.sourceNo))) flags.push('발행 주체 확인 필요');
-
-  const qualifiers: QualifierCheck[] = (model.qualifiers ?? [])
-    .map((q) => ({ text: short(q.text, 40), result: pick(q.result, QUALIFIER_RESULTS, '확인하지 못했다'), note: short(q.note, 160) }))
-    .filter((q) => q.text);
 
   return {
     verdict,

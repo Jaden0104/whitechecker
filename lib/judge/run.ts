@@ -42,6 +42,9 @@ export async function judgeClaim(input: JudgeInput, key: string, budget: Budget)
     schema: JUDGE_SCHEMA,
     maxTokens: LIMITS.judge.outputTokens,
     budget,
+    // 품질 우선으로 고정한다. 2026-11-21에 견줘 보니 품질 우선과 기본은 같은 모델(claude-sonnet-5.5)이 응답해 결과와 값이 같았고,
+    // 싼 모델은 인용문을 글자 그대로 옮기지 못해 대부분 '근거 부족'으로 떨어졌다. 기본에 맡기면 싼 모델이 섞일 수 있다
+    routingStrategy: 'quality',
   });
 
   const judgment = applyRules({

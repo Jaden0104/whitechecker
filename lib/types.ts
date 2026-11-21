@@ -190,6 +190,8 @@ export interface EvidenceUse {
   quote: string;
   /** 인용문이 그 번호의 발췌 안에 실제로 있는지(코드가 검사) */
   quoteFound: boolean;
+  /** 모델이 적은 근거 번호. 인용문이 같은 출처의 다른 발췌에 있어 코드가 번호를 바로잡았을 때만 둔다 */
+  correctedFrom?: number;
   /** 판정을 정하는 데 쓸 수 있는지: 인용문이 있고, 대상·범위·시점이 모두 적용 가능하고, 관계가 지지나 반박이다 */
   usable: boolean;
 }
@@ -236,13 +238,73 @@ export interface Judgment {
   sentenceKey: string;
 }
 
+/** [수정안 합치기]에 넘기는, 명제 하나의 고칠 내용. 판정의 고칠 내용 가운데 '없음'이 아닌 것만 넘긴다 */
+export interface MergeFix {
+  /** 명제의 번호. 예: "s6-c1" */
+  claimId: string;
+  /** 독립 명제. 문장의 어느 대목을 가리키는지 알려 주는 데 쓴다 */
+  statement: string;
+  kind: Exclude<FixKind, '없음'>;
+  instruction: string;
+  /** 인용형일 때 이름을 밝힐 출처. 없으면 빈 문자열 */
+  sourceName: string;
+}
+
+/** 원문과 수정안에서 달라진 숫자와 낱말. 편집자가 눈으로 확인하도록 화면에 보여 준다 */
+export interface RevisionChanges {
+  numbersRemoved: string[];
+  numbersAdded: string[];
+  wordsRemoved: string[];
+  wordsAdded: string[];
+}
+
+/** 문장 하나의 통합 수정안. 모델은 바꿀 대목만 내고, 문장은 코드가 그 대목만 바꿔서 만든다 */
+export interface SentenceRevision {
+  /** 고친 문장(원고에 적힌 꼴, Markdown 표시 포함). 반영한 것이 없으면 null */
+  revised: string | null;
+  /** 실제로 바꾼 대목. 이 밖의 글자는 원문 그대로다 */
+  edits: Array<{ before: string; after: string; claimIds: string[] }>;
+  /** 반영한 명제의 번호 */
+  applied: string[];
+  /** 반영하지 못한 명제와 그 까닭 */
+  skipped: Array<{ claimId: string; why: string }>;
+  /** 반영한 수정의 종류 */
+  kinds: FixKind[];
+  changes: RevisionChanges;
+  /** 화면에 함께 보여 줄 주의. 예: 고칠 내용에 적히지 않은 숫자가 들어갔다 */
+  cautions: string[];
+  /** 강조, 링크, 각주 표시가 원문과 같은지. 다르면 자동으로 반영하지 않는다 */
+  markupKept: boolean;
+  polish: PolishResult;
+  /** 수정안을 만든 문장의 식별값. 문장이 바뀌면 이 수정안은 이전 문장에 대한 것이 된다 */
+  sentenceKey: string;
+}
+
+/**
+ * 다듬기 검사의 결과. 코드가 대목만 바꿔 만든 문장을 모델에 다시 읽혀 문법만 손본다.
+ * - 검사 안 함: 수정안이 없다
+ * - 고칠 곳 없음: 모델이 자연스럽다고 봤다
+ * - 다듬음: 모델이 다듬었고, 숫자·낱말·표시가 그대로인 것을 코드가 확인해 받아들였다
+ * - 다듬지 못함: 모델이 어색하다고 봤지만 다듬은 결과를 받아들일 수 없었다. 수정안은 다듬기 전 그대로다
+ * - 검사 실패: 모델 호출이 실패했다. 수정안은 다듬기 전 그대로다
+ */
+export interface PolishResult {
+  state: '검사 안 함' | '고칠 곳 없음' | '다듬음' | '다듬지 못함' | '검사 실패';
+  /** 모델이 짚은 어색한 곳. 없으면 빈 문자열 */
+  problem: string;
+  /** 다듬기 전의 문장. '다듬음'일 때만 둔다 */
+  draft: string | null;
+}
+
 /** Liner 호출 한 번의 사용량 */
 export interface Usage {
   stage: string;
   model: string;
   promptTokens: number;
-  /** 입력 토큰 가운데 캐시에서 읽은 것. Liner가 알려 줄 때만 0보다 크다 */
+  /** 입력 토큰 가운데 캐시에서 읽은 것. 값이 입력의 20분의 1이다 */
   cachedTokens?: number;
+  /** 입력 토큰 가운데 캐시에 새로 쓴 것. 값이 입력보다 4분의 1 비싸다 */
+  cacheWriteTokens?: number;
   completionTokens: number;
   searchCalls: number;
   seconds: number;

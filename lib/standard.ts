@@ -38,6 +38,8 @@ export interface Standard {
   documentTypes: Array<{ id: string; grade: Grade; gradeOutsideRole?: Grade; about: string; role?: string }>;
   requirements: Record<ClaimType, Requirement>;
   qualifiers: string[];
+  /** 출처를 밝히지 않고 흐리는 말. 수정안에 이런 말이 새로 들어가면 알린다 */
+  hedges: string[];
   /** 판정 지침. 판정 지시문에 그대로 들어간다 */
   judgeGuidelines: string[];
   priority: { about: string; high: string[]; mid: string[]; low: string[] };

@@ -6,6 +6,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { LIMITS } from '../lib/limits.ts';
+import { totalCost } from '../lib/pricing.ts';
 import { splitManuscript } from '../lib/sentences.ts';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -140,12 +141,30 @@ for (const row of rows) {
   }
 }
 
-if (!only) writeFileSync(judgeFile, JSON.stringify(rows.map((r) => ({ claim: r.claim, ...(results.get(r.claim.id)?.data ?? {}) })), null, 2), 'utf8');
+const fresh = rows.map((r) => ({ claim: r.claim, ...(results.get(r.claim.id)?.data ?? {}) }));
+if (!only) {
+  writeFileSync(judgeFile, JSON.stringify(fresh, null, 2), 'utf8');
+} else if (existsSync(judgeFile)) {
+  // 고른 명제만 다시 판정했으면, 저장해 둔 결과에서 그 명제의 것만 바꾼다
+  const kept = JSON.parse(readFileSync(judgeFile, 'utf8'));
+  for (const row of fresh) {
+    const at = kept.findIndex((k) => k.claim.id === row.claim.id);
+    if (at >= 0) kept[at] = row;
+    else kept.push(row);
+  }
+  writeFileSync(judgeFile, JSON.stringify(kept, null, 2), 'utf8');
+  console.log(`\n고른 명제 ${fresh.length}개의 판정만 ${judgeFile}에서 바꿨다`);
+}
 
 const tokensIn = usage.reduce((n, u) => n + u.promptTokens, 0);
 const tokensOut = usage.reduce((n, u) => n + u.completionTokens, 0);
 const tokensCached = usage.reduce((n, u) => n + (u.cachedTokens ?? 0), 0);
-console.log(`\n명제 ${rows.length}개, 전체 ${elapsed.toFixed(1)}초, 모델 ${[...new Set(usage.map((u) => u.model))].join(', ')}, 토큰 입력 ${tokensIn}(캐시에서 읽은 것 ${tokensCached}) 출력 ${tokensOut}`);
+const tokensWritten = usage.reduce((n, u) => n + (u.cacheWriteTokens ?? 0), 0);
+const cost = totalCost(usage);
+// 캐시를 쓰지 않았다면 들었을 값: 캐시에서 읽은 것과 캐시에 쓴 것을 모두 보통 입력으로 친다
+const plainCost = totalCost(usage.map((u) => ({ ...u, cachedTokens: 0, cacheWriteTokens: 0 })));
+console.log(`\n명제 ${rows.length}개, 전체 ${elapsed.toFixed(1)}초, 모델 ${[...new Set(usage.map((u) => u.model))].join(', ')}, 토큰 입력 ${tokensIn}(캐시에서 읽은 것 ${tokensCached}, 캐시에 쓴 것 ${tokensWritten}) 출력 ${tokensOut}`);
+console.log(`추정 비용 ${cost.dollars.toFixed(4)}달러(캐시가 없었다면 ${plainCost.dollars.toFixed(4)}달러), 캐시에서 읽은 호출 ${usage.filter((u) => (u.cachedTokens ?? 0) > 0).length}/${usage.length}`);
 console.log(`정답지와 견준 결과: 허용 ${tally.허용}, 허용 밖 ${tally['허용 밖']}, 불허 ${tally.불허}, 실패 ${tally.실패}`);
 console.log(`코드가 판정을 바꾼 것 ${changed}건, 인용문이 발췌에 있는 것 ${quotesFound}/${quotes}`);
 if (!only) console.log(`판정 결과를 ${judgeFile}에 저장했다`);

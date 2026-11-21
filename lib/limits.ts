@@ -18,6 +18,8 @@ export const LIMITS = {
   },
   judge: { outputTokens: 2000 },
   merge: { outputTokens: 1000 },
+  /** 수정안의 다듬기 검사. 문장 하나를 다시 적는 정도다 */
+  polish: { outputTokens: 800 },
   /** 요청 하나의 처리 시간. 다시 시도하느라 기다린 시간과 원문 수집 시간을 포함한다 */
   requestMs: 60_000,
   /** 호출 하나를 다시 시도하는 횟수 */
