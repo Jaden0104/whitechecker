@@ -12,6 +12,12 @@ interface Props {
   onResume: () => void;
   onHome: () => void;
   onClear: () => void;
+  /** 내보내기 화면을 열거나 닫는다. 주지 않으면 단추를 보이지 않는다 */
+  onExport?: () => void;
+  /** 내보내기 화면이 열려 있는지 */
+  exporting?: boolean;
+  /** 채택한 문장 수. 단추에 함께 적는다 */
+  adopted?: number;
 }
 
 /** 돌아가는 동안 1초마다 다시 그려, 걸린 시간이 흐르게 한다 */
@@ -26,7 +32,7 @@ function useTick(active: boolean): number {
   return now;
 }
 
-export function TopBar({ run, onStop, onResume, onHome, onClear }: Props) {
+export function TopBar({ run, onStop, onResume, onHome, onClear, onExport, exporting, adopted }: Props) {
   const [showUsage, setShowUsage] = useState(false);
   const running = run !== null && (run.status === '추출 중' || run.status === '검증 중');
   const now = useTick(running);
@@ -99,6 +105,18 @@ export function TopBar({ run, onStop, onResume, onHome, onClear }: Props) {
                 이어서 실행
               </button>
             )}
+            {onExport &&
+              counts.total > 0 &&
+              (exporting ? (
+                <button type="button" className="btn small" onClick={onExport}>
+                  검토로 돌아가기
+                </button>
+              ) : (
+                // 다시 돌릴 것이 남아 있으면 '이어서 실행'이 먼저다. 그때는 내보내기를 눈에 덜 띄게 둔다
+                <button type="button" className={hasUnfinished(run) ? 'btn small' : 'btn primary small'} onClick={onExport}>
+                  내보내기{adopted ? ` · 채택 ${adopted}` : ''}
+                </button>
+              ))}
             <button type="button" className="btn quiet small" onClick={onHome}>
               처음으로
             </button>

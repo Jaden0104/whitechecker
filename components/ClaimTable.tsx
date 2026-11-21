@@ -1,102 +1,117 @@
-// 판정표(F8): 편집 우선순위가 높은 것부터 보이고, '일치'는 접어 둔다. 판정별로 골라 보고 원고 순서로 바꿔 볼 수 있다.
+// 판정표(F8): 한 줄이 문장 하나다. 편집 우선순위가 높은 것부터 보이고, 모두 '일치'인 문장은 접어 둔다.
+// 판정별로 골라 보고 원고 순서로 바꿔 볼 수 있다. 어느 사실이 어느 판정인지는 줄을 눌러 상세에서 본다.
 import { useState } from 'react';
-import type { ClaimView } from '@/lib/run/model';
+import { candidateText, compareByRank, reviewOf, type RunState, type SentenceRow } from '@/lib/run/model';
 import type { Verdict } from '@/lib/types';
-import { PriorityBadge, StateBadge, VerdictBadge } from './bits';
+import { DecisionChip, InlineText, PriorityBadge, StateBadge, VerdictBadge } from './bits';
 
 type Filter = '전체' | '불일치' | '해석 주의' | '근거 부족' | '일치' | '미완료';
 
-const PRIORITY_ORDER: Record<string, number> = { 상: 0, 중: 1, 하: 2 };
-const VERDICT_ORDER: Partial<Record<Verdict, number>> = { 불일치: 0, '근거 부족': 1, '해석 주의': 2 };
+/** 줄의 순서: 그 문장에서 가장 급한 명제를 따르고, 같으면 원고 순서 */
+export function compareRows(a: SentenceRow, b: SentenceRow): number {
+  return compareByRank(a.top, b.top) || a.sentence.id - b.sentence.id;
+}
 
-/** 보이는 순서(F8): 편집 우선순위가 높은 것부터, 같은 우선순위 안에서는 불일치, 근거 부족, 해석 주의 순 */
-export function compareByRank(a: ClaimView, b: ClaimView): number {
-  const rank = (v: ClaimView) => [PRIORITY_ORDER[v.judgment?.priority ?? ''] ?? 3, VERDICT_ORDER[v.verdict as Verdict] ?? 3];
-  const [pa, va] = rank(a);
-  const [pb, vb] = rank(b);
-  return pa - pb || va - vb;
+/** 손봐야 할 판정이 하나라도 나온 문장인지 */
+const warned = (row: SentenceRow) => row.badges.some((b) => b.verdict !== '일치');
+
+function matches(row: SentenceRow, filter: Filter): boolean {
+  if (filter === '전체') return true;
+  if (filter === '미완료') return row.pending.length > 0;
+  // '일치'는 사실이 모두 맞은 문장만 가리킨다. 섞인 문장은 손볼 판정 쪽에서 찾는다
+  if (filter === '일치') return row.allOk;
+  return row.badges.some((b) => b.verdict === (filter as Verdict));
 }
 
 interface Props {
-  views: ClaimView[];
+  run: RunState;
+  rows: SentenceRow[];
   running: boolean;
   /** 명제를 뽑는 중이라 아직 줄이 없을 수 있다 */
   extracting: boolean;
-  selected: string | null;
+  /** 지금 열어 본 명제가 걸린 문장의 번호 */
+  selectedSentence: number | null;
   onSelect: (claimId: string) => void;
 }
 
-export function ClaimRow({ view, current, onSelect }: { view: ClaimView; current: boolean; onSelect: (claimId: string) => void }) {
-  const { claim } = view.entry;
-  const done = view.state === '완료' && view.verdict !== null;
-  const fix = view.judgment?.fix.kind;
-  const notes = [
-    view.judgment?.needChoice ? '선택 필요' : '',
-    ...(view.judgment?.flags ?? []),
-    view.sharedWith ? '같은 명제의 결과를 함께 씀' : '',
+function Row({ run, row, current, onSelect }: { run: RunState; row: SentenceRow; current: boolean; onSelect: (claimId: string) => void }) {
+  const { sentence, views, top, badges, okCount, pending } = row;
+  const done = views.filter((v) => v.state === '완료' && v.verdict !== null);
+  const kinds = [...new Set(done.map((v) => v.judgment?.fix.kind).filter((k): k is NonNullable<typeof k> => Boolean(k) && k !== '없음'))];
+  const types = [...new Set(views.map((v) => v.entry.claim.type))];
+  const flags = [...new Set(done.flatMap((v) => [v.judgment?.needChoice ? '선택 필요' : '', ...(v.judgment?.flags ?? [])]).filter(Boolean))];
+  // 처리가 끝나지 않은 명제는 판정처럼 보이지 않게 상태로 따로 적는다. 돌고 있는 것, 실패한 것 순으로 하나만 보인다
+  const waiting = pending.find((v) => v.state === '진행 중') ?? pending.find((v) => v.state === '실패') ?? pending[0];
+  const meta = [
+    types.slice(0, 2).join(', ') + (types.length > 2 ? ' 외' : ''),
+    `문장 ${sentence.id}`,
+    views.length > 1 ? `확인한 사실 ${views.length}가지${okCount > 0 && !row.allOk ? ` 가운데 ${okCount}가지는 일치` : ''}` : '',
+    ...flags,
+    views.some((v) => v.sharedWith) ? '같은 명제의 결과를 함께 씀' : '',
   ].filter(Boolean);
   return (
     <li>
-      <button type="button" className={done ? 'row' : 'row pending'} aria-current={current} onClick={() => onSelect(claim.id)}>
+      <button type="button" className={done.length === 0 ? 'row pending' : 'row'} aria-current={current} onClick={() => onSelect(top.entry.claim.id)}>
         <div className="head">
-          {done && view.verdict ? (
-            <>
-              <PriorityBadge priority={view.judgment?.priority ?? null} />
-              <VerdictBadge verdict={view.verdict} />
-              {fix && fix !== '없음' && <span className="tag fix">{fix}</span>}
-            </>
-          ) : (
-            <StateBadge state={view.state} step={view.step} failure={view.failure} />
+          <PriorityBadge priority={top.judgment?.priority ?? null} />
+          {badges.map((b) => (
+            <VerdictBadge key={b.verdict} verdict={b.verdict} count={b.count} />
+          ))}
+          {waiting && (
+            <span className="state">
+              <StateBadge state={waiting.state} step={waiting.step} failure={waiting.failure} />
+              {pending.length > 1 && <span>외 {pending.length - 1}</span>}
+            </span>
           )}
+          <span className="push">
+            {kinds.map((kind) => (
+              <span key={kind} className="tag fix">
+                {kind}
+              </span>
+            ))}
+            <DecisionChip review={reviewOf(run, sentence.id)} hasCandidate={candidateText(run, sentence.id) !== null} />
+          </span>
         </div>
-        <div className="text">{claim.statement}</div>
-        <div className="meta">
-          {claim.type} · 문장 {claim.sentenceId}
-          {notes.map((note) => ` · ${note}`)}
-        </div>
+        <div className="text">{sentence.kind === 'table' ? sentence.plain : <InlineText source={sentence.source} />}</div>
+        <div className="meta">{meta.join(' · ')}</div>
       </button>
     </li>
   );
 }
 
-export function ClaimTable({ views, running, extracting, selected, onSelect }: Props) {
+export function ClaimTable({ run, rows, running, extracting, selectedSentence, onSelect }: Props) {
   const [filter, setFilter] = useState<Filter>('전체');
   const [byPriority, setByPriority] = useState(true);
   const [showOk, setShowOk] = useState(false);
 
-  const finished = views.filter((v) => v.state === '완료' && v.verdict !== null);
-  const unfinished = views.filter((v) => !(v.state === '완료' && v.verdict !== null));
-  const count = (f: Filter) => (f === '전체' ? views.length : f === '미완료' ? unfinished.length : finished.filter((v) => v.verdict === f).length);
+  const count = (f: Filter) => rows.filter((row) => matches(row, f)).length;
   const chips: Filter[] = ['전체', '불일치', '해석 주의', '근거 부족', '일치'];
+  const unfinished = count('미완료');
   // 돌아가는 동안에는 줄이 자리를 옮기지 않게 원고 순서로 둔다
   const sorted = byPriority && !running;
+  const list = rows.filter((row) => matches(row, filter));
 
-  let list = views;
-  if (filter === '미완료') list = unfinished;
-  else if (filter !== '전체') list = finished.filter((v) => v.verdict === filter);
-
-  const byRank = compareByRank;
-
-  const row =(v: ClaimView) => <ClaimRow key={v.entry.claim.id} view={v} current={selected === v.entry.claim.id} onSelect={onSelect} />;
-  let rows;
+  const item = (row: SentenceRow) => <Row key={row.sentence.id} run={run} row={row} current={selectedSentence === row.sentence.id} onSelect={onSelect} />;
+  let body;
   if (!sorted || filter !== '전체') {
-    rows = (sorted ? [...list].sort(byRank) : list).map(row);
+    body = (sorted ? [...list].sort(compareRows) : list).map(item);
   } else {
-    // 경고가 붙은 것을 우선순위대로, 그다음 끝나지 않은 것, '일치'는 접어서 맨 아래에
-    const warned = finished.filter((v) => v.verdict !== '일치').sort(byRank);
-    const ok = finished.filter((v) => v.verdict === '일치');
-    rows = (
+    // 손볼 판정이 난 문장을 급한 순서로, 그다음 아직 판정이 없는 문장, 모두 '일치'인 문장은 접어서 맨 아래에
+    const first = list.filter(warned).sort(compareRows);
+    const later = list.filter((row) => !warned(row) && !row.allOk);
+    const ok = list.filter((row) => row.allOk);
+    body = (
       <>
-        {warned.map(row)}
-        {unfinished.map(row)}
+        {first.map(item)}
+        {later.map(item)}
         {ok.length > 0 && (
           <li>
             <button type="button" className="fold" aria-expanded={showOk} onClick={() => setShowOk((v) => !v)}>
-              <VerdictBadge verdict="일치" /> {ok.length}건
+              <VerdictBadge verdict="일치" /> 모두 일치한 문장 {ok.length}개
             </button>
           </li>
         )}
-        {showOk && ok.map(row)}
+        {showOk && ok.map(item)}
       </>
     );
   }
@@ -110,9 +125,9 @@ export function ClaimTable({ views, running, extracting, selected, onSelect }: P
             <span className="n">{count(f)}</span>
           </button>
         ))}
-        {!running && unfinished.length > 0 && (
+        {!running && unfinished > 0 && (
           <button type="button" className="chip" aria-pressed={filter === '미완료'} onClick={() => setFilter('미완료')}>
-            미완료<span className="n">{unfinished.length}</span>
+            미완료<span className="n">{unfinished}</span>
           </button>
         )}
         {!running && (
@@ -122,12 +137,12 @@ export function ClaimTable({ views, running, extracting, selected, onSelect }: P
         )}
       </div>
       <div className="scroll">
-        {views.length === 0 ? (
-          <p className="hint-row">{extracting ? '원고에서 확인할 명제를 뽑고 있습니다.' : '판정표에 올릴 명제가 없습니다.'}</p>
+        {rows.length === 0 ? (
+          <p className="hint-row">{extracting ? '원고에서 확인할 명제를 뽑고 있습니다.' : '판정표에 올릴 문장이 없습니다.'}</p>
         ) : list.length === 0 ? (
-          <p className="hint-row">여기에 해당하는 항목이 없습니다.</p>
+          <p className="hint-row">여기에 해당하는 문장이 없습니다.</p>
         ) : (
-          <ul className="rows">{rows}</ul>
+          <ul className="rows">{body}</ul>
         )}
       </div>
     </>

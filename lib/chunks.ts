@@ -3,6 +3,20 @@ import { LIMITS } from './limits.ts';
 import type { ExtractInput } from './prompts/extract.ts';
 import type { Sentence } from './types.ts';
 
+/**
+ * 그 문장의 바로 뒤에 이어지는 글(뒤 문맥). 다음 소제목 앞까지의 문장에서 앞부분만 돌려준다.
+ * 지시어와 시점을 뒤 문장에서 밝히는 글("그해 겨울이었다. 1395년의 일이다.")을 풀 수 있게 하려는 것이다.
+ * 처음 검증의 묶음과, 한 문장만 다시 검증할 때(F14)가 같은 규칙을 쓴다.
+ */
+export function followingText(sentences: Sentence[], sentenceId: number, maxChars: number = LIMITS.extract.afterChars): string {
+  const following = sentences.filter((s) => s.id > sentenceId);
+  const nextHeading = following.findIndex((s) => s.kind === 'heading');
+  return (nextHeading < 0 ? following : following.slice(0, nextHeading))
+    .map((s) => s.plain)
+    .join(' ')
+    .slice(0, maxChars);
+}
+
 export function buildExtractChunks(sentences: Sentence[], maxChars: number = LIMITS.extract.inputChars): ExtractInput[] {
   const title = sentences.find((s) => s.kind === 'heading')?.plain ?? '';
   const chunks: ExtractInput[] = [];
@@ -43,5 +57,11 @@ export function buildExtractChunks(sentences: Sentence[], maxChars: number = LIM
     }
   }
   flush();
+  // 묶음마다 바로 뒤에 이어지는 글을 뒤 문맥으로 붙인다. 묶음의 끝에 놓인 문장은 같은 묶음 안에 뒤 문장이 없기 때문이다.
+  // 긴 문단이 한가운데서 끊긴 묶음에서 특히 필요하다. 뒤에 글이 없거나 바로 소제목이 오면 붙이지 않는다
+  for (const chunk of chunks) {
+    const after = followingText(sentences, chunk.sentences[chunk.sentences.length - 1].id);
+    if (after) chunk.after = after;
+  }
   return chunks;
 }

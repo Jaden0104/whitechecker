@@ -25,10 +25,13 @@ function readInput(body: unknown): ExtractInput | string {
   if (sentences.length !== b.sentences.length) return '문장의 형식이 맞지 않습니다.';
   const size = sentences.reduce((n, s) => n + s.text.length, 0);
   if (size > LIMITS.extract.inputChars) return `한 번에 보낼 수 있는 글자 수(${LIMITS.extract.inputChars}자)를 넘었습니다.`;
+  // 뒤 문맥은 앞부분만 받는다. 번호가 붙은 문장의 바로 뒤에 이어지는 글이기 때문이다
+  const after = typeof b.after === 'string' ? b.after.trim().slice(0, LIMITS.extract.afterChars) : '';
   return {
     title: String(b.title ?? '').slice(0, 200),
     context: String(b.context ?? '').slice(-LIMITS.extract.contextChars),
     sentences,
+    ...(after ? { after } : {}),
   };
 }
 

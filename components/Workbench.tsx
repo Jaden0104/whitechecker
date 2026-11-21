@@ -4,11 +4,15 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { createApi } from '@/lib/client/api';
 import { clearRecords, loadAccessCode, loadRun, saveAccessCode, saveRun } from '@/lib/client/storage';
-import { countClaims, entryOf, hasUnfinished, viewOf, type ClaimView, type RunState } from '@/lib/run/model';
+import { countClaims, entryOf, hasUnfinished, isAdopted, sentenceRows, staysDirect, viewOf, type RunState } from '@/lib/run/model';
+import { createRechecker } from '@/lib/run/recheck';
+import { applyReview, type ReviewAction } from '@/lib/run/review';
 import { createRunner } from '@/lib/run/runner';
 import { ClaimDetail } from './ClaimDetail';
-import { ClaimTable, compareByRank } from './ClaimTable';
-import { DirectList } from './DirectList';
+import { ClaimTable, compareRows } from './ClaimTable';
+import { DirectList, directSentenceCount } from './DirectList';
+import { ExportPanel } from './ExportPanel';
+import { PaperView } from './PaperView';
 import { MAX_CHARS, StartScreen, type Sample } from './StartScreen';
 import { TopBar } from './TopBar';
 
@@ -38,8 +42,11 @@ function createStore() {
 function createKit() {
   const store = createStore();
   const access = { code: '' };
-  const runner = createRunner(store, createApi(() => access.code));
-  return { store, access, runner };
+  const api = createApi(() => access.code);
+  const runner = createRunner(store, api);
+  // 선택한 문장 다시 검증(F14)은 실행과 따로 돈다. 같은 저장소와 같은 서버 경로를 쓴다
+  const rechecker = createRechecker(store, api);
+  return { store, access, runner, rechecker };
 }
 
 const noRun = () => null;
@@ -53,7 +60,9 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
   const [code, setCode] = useState('');
   const [draft, setDraft] = useState('');
   const [startError, setStartError] = useState('');
-  const [tab, setTab] = useState<'table' | 'direct'>('table');
+  const [tab, setTab] = useState<'table' | 'paper' | 'direct'>('table');
+  /** 오른쪽 칸에 무엇을 보일지: 고른 명제의 상세, 또는 내보내기 */
+  const [panel, setPanel] = useState<'detail' | 'export'>('detail');
   const [selected, setSelected] = useState<string | null>(null);
   const [inDetail, setInDetail] = useState(false);
 
@@ -132,8 +141,10 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
     if (text.length > MAX_CHARS) return setStartError(`원고가 ${MAX_CHARS.toLocaleString()}자를 넘습니다. 나눠서 넣어 주십시오.`);
     const existing = kit.store.get();
     if (existing && existing.claims.length > 0 && !window.confirm('앞서 한 검증 결과를 지우고 새로 시작합니다. 계속할까요?')) return;
+    kit.rechecker.stopAll();
     const result = kit.runner.start(text);
     if (!result.ok) return setStartError(result.message);
+    setPanel('detail');
     saveAccessCode(code);
     setStartError('');
     setSelected(null);
@@ -149,8 +160,10 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
 
   async function clearAll() {
     if (!window.confirm('이 기기에 남은 원고와 검증 결과, 접속 코드를 지웁니다. 돌고 있는 검증도 멈춥니다. 계속할까요?')) return;
+    kit.rechecker.stopAll();
     kit.runner.clear();
     kit.access.code = '';
+    setPanel('detail');
     setCode('');
     setDraft('');
     setStartError('');
@@ -160,11 +173,10 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
     await clearRecords();
   }
 
-  const views = useMemo(() => (run ? run.claims.map((e) => viewOf(run, e)) : []), [run]);
-  // '직접 확인' 목록에는 공개 자료로 확인할 수 없다고 본 주장을 둔다. 찾아보니 자료가 있어 판정이 난 것은 판정표로 간다
-  const isDirect = (v: ClaimView) => v.direct !== null && !v.direct.reclassified;
-  const tableViews = useMemo(() => views.filter((v) => !isDirect(v)), [views]);
-  const directViews = useMemo(() => views.filter(isDirect), [views]);
+  // 판정표의 한 줄은 문장 하나다. '직접 확인' 목록에는 공개 자료로 확인할 수 없다고 본 주장을 둔다(찾아보니 자료가 있어 판정이 난 것은 판정표로 간다)
+  const rows = useMemo(() => (run ? sentenceRows(run) : []), [run]);
+  const directViews = useMemo(() => (run ? run.claims.map((e) => viewOf(run, e)).filter(staysDirect) : []), [run]);
+  const adopted = useMemo(() => (run ? run.sentences.filter((s) => isAdopted(run, s.id)).length : 0), [run]);
 
   const running = run !== null && (run.status === '추출 중' || run.status === '검증 중');
   const finishedRun = run !== null && run.status === '끝남';
@@ -172,15 +184,40 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
   // 검증이 끝났는데 고른 항목이 없으면 맨 먼저 볼 항목을 골라 둔다(넓은 화면에서 상세가 비어 보이지 않게)
   useEffect(() => {
     if (!finishedRun || selected !== null || !run) return;
-    const warned = tableViews.filter((v) => v.verdict !== null && v.verdict !== '일치').sort(compareByRank);
-    const first = warned[0] ?? tableViews[0] ?? directViews[0];
+    const warned = rows.filter((row) => !row.allOk).sort(compareRows);
+    const first = (warned[0] ?? rows[0])?.top ?? directViews[0];
     if (first) setSelected(first.entry.claim.id);
-  }, [finishedRun, selected, run, tableViews, directViews]);
+  }, [finishedRun, selected, run, rows, directViews]);
 
   const select = useCallback((claimId: string) => {
     setSelected(claimId);
+    setPanel('detail');
     setInDetail(true);
   }, []);
+
+  /** 편집자의 선택(F10). 고르는 즉시 브라우저에 저장해, 새로 고쳐도 남아 있게 한다 */
+  const review = useCallback(
+    (sentenceId: number, action: ReviewAction): string => {
+      let notice = '';
+      kit.store.set((prev) => {
+        if (!prev) return prev;
+        const outcome = applyReview(prev, sentenceId, action, new Date().toISOString());
+        notice = outcome.notice;
+        return outcome.run;
+      });
+      void saveRun(kit.store.get());
+      return notice;
+    },
+    [kit],
+  );
+
+  const recheck = useCallback(
+    (sentenceId: number) => {
+      saveAccessCode(kit.access.code);
+      void kit.rechecker.start(sentenceId);
+    },
+    [kit],
+  );
 
   if (!ready) {
     return (
@@ -219,6 +256,12 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
   const failedChunks = run.chunks.filter((c) => c.state === '실패' || c.state === '중단').length;
   const selectedEntry = selected ? entryOf(run, selected) : undefined;
   const selectedView = selectedEntry ? viewOf(run, selectedEntry) : null;
+  const selectedSentence = selectedEntry?.claim.sentenceId ?? null;
+  const toggleExport = () => {
+    const next = panel === 'export' ? 'detail' : 'export';
+    setPanel(next);
+    setInDetail(next === 'export');
+  };
 
   let banner: { text: string; bad: boolean } | null = null;
   if (run.blocked) banner = { text: `${run.blocked} '처음으로'에서 접속 코드를 고친 뒤 이 화면으로 돌아와 '이어서 실행'을 누르십시오.`, bad: true };
@@ -232,7 +275,16 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
   return (
     <div className="wc">
       <div className={`app${banner ? ' with-banner' : ''}${inDetail ? ' in-detail' : ''}`}>
-        <TopBar run={run} onStop={kit.runner.stop} onResume={resume} onHome={() => setScreen('start')} onClear={() => void clearAll()} />
+        <TopBar
+          run={run}
+          onStop={kit.runner.stop}
+          onResume={resume}
+          onHome={() => setScreen('start')}
+          onClear={() => void clearAll()}
+          onExport={toggleExport}
+          exporting={panel === 'export'}
+          adopted={adopted}
+        />
         {banner && (
           <div className={banner.bad ? 'banner bad' : 'banner'} role="status">
             <span className="grow">{banner.text}</span>
@@ -242,20 +294,36 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
           <aside className="side">
             <div className="tabs" role="tablist">
               <button type="button" role="tab" aria-selected={tab === 'table'} onClick={() => setTab('table')}>
-                판정표<span className="n">{tableViews.length}</span>
+                판정표<span className="n">{rows.length}</span>
+              </button>
+              <button type="button" role="tab" aria-selected={tab === 'paper'} onClick={() => setTab('paper')}>
+                원고 보기
               </button>
               <button type="button" role="tab" aria-selected={tab === 'direct'} onClick={() => setTab('direct')}>
-                직접 확인<span className="n">{directViews.length}</span>
+                직접 확인<span className="n">{directSentenceCount(directViews)}</span>
               </button>
             </div>
             {tab === 'table' ? (
-              <ClaimTable views={tableViews} running={running} extracting={run.status === '추출 중'} selected={selected} onSelect={select} />
+              <ClaimTable run={run} rows={rows} running={running} extracting={run.status === '추출 중'} selectedSentence={selectedSentence} onSelect={select} />
+            ) : tab === 'paper' ? (
+              <PaperView run={run} selectedSentence={selectedSentence} onSelect={select} />
             ) : (
-              <DirectList views={directViews} selected={selected} onSelect={select} />
+              <DirectList run={run} views={directViews} selectedSentence={selectedSentence} onSelect={select} />
             )}
           </aside>
           <main className="main">
-            <ClaimDetail run={run} view={selectedView} onBack={() => setInDetail(false)} />
+            {panel === 'export' ? (
+              <ExportPanel
+                run={run}
+                onBack={() => {
+                  setPanel('detail');
+                  setInDetail(false);
+                }}
+                onOpen={select}
+              />
+            ) : (
+              <ClaimDetail run={run} view={selectedView} running={running} onBack={() => setInDetail(false)} onSelect={select} onReview={review} onRecheck={recheck} />
+            )}
           </main>
         </div>
       </div>

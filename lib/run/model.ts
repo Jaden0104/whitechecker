@@ -11,6 +11,8 @@ export interface ChunkEntry {
   title: string;
   context: string;
   sentences: Array<{ id: number; text: string }>;
+  /** 묶음의 바로 뒤에 이어지는 글(뒤 문맥). 뒤에 글이 없거나 앞선 판에서 저장한 기록이면 없다 */
+  after?: string;
   state: ItemState;
   failure: string;
   /** 응답이 온전하지 않아 반으로 나눠 다시 보낸 묶음이다. 한 번 더 나누지는 않는다 */
@@ -52,6 +54,30 @@ export interface RevisionEntry {
   fixesKey: string;
 }
 
+/** 문장에 대한 편집자의 선택(F10). 고르지 않은 문장은 보류로 처리한다 */
+export interface ReviewEntry {
+  choice: '' | '채택' | '보류';
+  /** 편집자가 고쳐 쓴 수정안(원고에 적힌 꼴). 고쳐 쓰지 않았으면 null */
+  edited: string | null;
+  /** 마지막으로 고르거나 고친 시각 */
+  at: string;
+}
+
+/** 문장 하나를 다시 검증한 결과(F14). 요청할 때의 글에 묶는다. 그 뒤에 글이 바뀌면 이전 문장에 대한 결과가 된다 */
+export interface RecheckEntry {
+  /** 요청 번호. 늦게 도착한 앞선 요청의 응답이 지금의 결과를 덮어쓰지 않게 한다 */
+  token: string;
+  /** 다시 검증한 글(원고에 적힌 꼴) */
+  text: string;
+  /** 편집자가 고쳐 쓴 글을 검증했는지, 원문을 검증했는지 */
+  target: 'edited' | 'original';
+  state: '진행 중' | '완료' | '실패' | '중단';
+  failure: string;
+  /** 그 글에서 다시 뽑은 명제와 그 근거, 판정 */
+  claims: ClaimEntry[];
+  at: string;
+}
+
 export type RunStatus = '추출 중' | '검증 중' | '끝남' | '중단';
 
 export interface RunState {
@@ -80,6 +106,10 @@ export interface RunState {
   blocked: string;
   /** 한 번에 처리하는 수를 넘겨 다음 실행으로 넘긴 명제 수 */
   deferred: number;
+  /** 문장별 선택과 고쳐 쓴 수정안(F10). 앞선 판에서 저장한 기록에는 없을 수 있다 */
+  reviews?: Record<number, ReviewEntry>;
+  /** 문장별 재검증 결과(F14) */
+  rechecks?: Record<number, RecheckEntry>;
 }
 
 /** 내부 수치와 비공개 취재가 나오는 유형. 이 유형의 '직접 확인'은 검색해 보지 않고 확정한다(F9) */
@@ -212,6 +242,10 @@ export function recover(run: RunState): RunState {
   const settle = <T extends { state: string }>(item: T): T => (item.state === '진행 중' ? { ...item, state: '중단' } : item);
   const revisions: Record<number, RevisionEntry> = {};
   for (const [id, r] of Object.entries(run.revisions)) revisions[Number(id)] = settle(r);
+  const rechecks: Record<number, RecheckEntry> = {};
+  for (const [id, k] of Object.entries(run.rechecks ?? {})) {
+    rechecks[Number(id)] = { ...settle(k), claims: k.claims.map((e) => ({ ...settle(e), step: '' as Step })) };
+  }
   const wasRunning = run.status === '추출 중' || run.status === '검증 중';
   return {
     ...run,
@@ -220,7 +254,149 @@ export function recover(run: RunState): RunState {
     chunks: run.chunks.map(settle),
     claims: run.claims.map((e) => ({ ...settle(e), step: '' as Step })),
     revisions,
+    rechecks,
   };
+}
+
+// ---------- 문장 단위로 보기: 판정표의 줄, 편집자의 선택, 재검증(F8, F10, F14) ----------
+
+const PRIORITY_ORDER: Record<string, number> = { 상: 0, 중: 1, 하: 2 };
+const VERDICT_ORDER: Record<Verdict, number> = { 불일치: 0, '근거 부족': 1, '해석 주의': 2, '직접 확인': 3, 일치: 4 };
+
+/** 보이는 순서(F8): 편집 우선순위가 높은 것부터, 같은 우선순위 안에서는 불일치, 근거 부족, 해석 주의 순. 끝나지 않은 것은 맨 뒤 */
+export function compareByRank(a: ClaimView, b: ClaimView): number {
+  const rank = (v: ClaimView) => [PRIORITY_ORDER[v.judgment?.priority ?? ''] ?? 3, v.verdict ? VERDICT_ORDER[v.verdict] : 5];
+  const [pa, va] = rank(a);
+  const [pb, vb] = rank(b);
+  return pa - pb || va - vb;
+}
+
+/** '직접 확인'으로 남는 명제인지. 찾아보니 자료가 있어 판정이 난 것은 아니다 */
+export const staysDirect = (view: ClaimView): boolean => view.direct !== null && !view.direct.reclassified;
+
+/** 판정표의 한 줄. 한 줄이 문장 하나다 */
+export interface SentenceRow {
+  sentence: Sentence;
+  /** 이 문장에 걸린 명제 전체('직접 확인' 포함). 원고에서 뽑힌 순서다 */
+  views: ClaimView[];
+  /** 가장 급한 명제. 줄의 자리를 정하고, 줄을 누르면 이 명제를 연다 */
+  top: ClaimView;
+  /** 줄에 올릴 판정 표시. 손봐야 할 판정을 급한 순서로 적고, 손볼 것이 없으면 '일치' 하나만 적는다 */
+  badges: Array<{ verdict: Verdict; count: number }>;
+  /** '일치'로 끝난 명제 수 */
+  okCount: number;
+  /** 처리가 끝나지 않은 명제 */
+  pending: ClaimView[];
+  /** 모두 끝났고 모두 '일치'다 */
+  allOk: boolean;
+}
+
+/**
+ * 판정표의 줄을 만든다. 공개 자료로 확인하는 명제가 하나라도 있는 문장만 올리고, 원고 순서로 돌려준다.
+ * '직접 확인'으로만 이뤄진 문장은 직접 확인 목록에만 둔다.
+ */
+export function sentenceRows(run: RunState): SentenceRow[] {
+  const rows: SentenceRow[] = [];
+  for (const sentence of run.sentences) {
+    const views = run.claims.filter((e) => e.claim.sentenceId === sentence.id).map((e) => viewOf(run, e));
+    if (!views.some((v) => !staysDirect(v))) continue;
+    const finished = views.filter((v) => v.state === '완료' && v.verdict !== null);
+    const pending = views.filter((v) => !(v.state === '완료' && v.verdict !== null));
+    const warned = finished.filter((v) => v.verdict !== '일치').sort(compareByRank);
+    const okCount = finished.length - warned.length;
+    const badges: SentenceRow['badges'] = [];
+    for (const v of [...warned].sort((a, b) => VERDICT_ORDER[a.verdict as Verdict] - VERDICT_ORDER[b.verdict as Verdict])) {
+      const last = badges[badges.length - 1];
+      if (last && last.verdict === v.verdict) last.count += 1;
+      else badges.push({ verdict: v.verdict as Verdict, count: 1 });
+    }
+    const allOk = pending.length === 0 && warned.length === 0;
+    if (allOk) badges.push({ verdict: '일치', count: 1 });
+    rows.push({ sentence, views, top: warned[0] ?? pending[0] ?? views[0], badges, okCount, pending, allOk });
+  }
+  return rows;
+}
+
+const NO_REVIEW: ReviewEntry = { choice: '', edited: null, at: '' };
+
+export function reviewOf(run: RunState, sentenceId: number): ReviewEntry {
+  return run.reviews?.[sentenceId] ?? NO_REVIEW;
+}
+
+/** 자동으로 만든 수정안. 만들지 않았거나 걸러졌으면 null */
+export function autoRevision(run: RunState, sentenceId: number): SentenceRevision | null {
+  const entry = run.revisions[sentenceId];
+  return entry?.state === '완료' && entry.revision?.revised ? entry.revision : null;
+}
+
+/** 지금의 수정안: 편집자가 고쳐 쓴 글이 있으면 그것, 없으면 자동으로 만든 수정안. 둘 다 없으면 null */
+export function candidateText(run: RunState, sentenceId: number): string | null {
+  const edited = reviewOf(run, sentenceId).edited;
+  return edited !== null ? edited : (autoRevision(run, sentenceId)?.revised ?? null);
+}
+
+/** 채택한 문장인지. 채택은 수정안이 있을 때만 뜻이 있다 */
+export function isAdopted(run: RunState, sentenceId: number): boolean {
+  return reviewOf(run, sentenceId).choice === '채택' && candidateText(run, sentenceId) !== null;
+}
+
+/** 다시 검증할 글: 편집자가 고쳐 쓴 글이 있으면 그것, 없으면 원문 */
+export function recheckTarget(run: RunState, sentence: Sentence): { text: string; target: 'edited' | 'original' } {
+  const edited = reviewOf(run, sentence.id).edited;
+  return edited !== null ? { text: edited, target: 'edited' } : { text: sentence.source, target: 'original' };
+}
+
+export type RecheckStatus = '미검증' | '검증 중' | '현재 문장 검증 완료' | '이전 문장에 대한 결과';
+
+/** 재검증 상태(F14). 고쳐 쓰지도 않았고 다시 검증한 적도 없으면 null */
+export function recheckStatus(run: RunState, sentence: Sentence): RecheckStatus | null {
+  const entry = run.rechecks?.[sentence.id];
+  const now = recheckTarget(run, sentence);
+  if (entry?.state === '진행 중') return '검증 중';
+  if (entry?.state === '완료' && entry.text === now.text) return '현재 문장 검증 완료';
+  if (entry?.state === '완료' && entry.target === 'edited' && now.target === 'edited') return '이전 문장에 대한 결과';
+  return now.target === 'edited' ? '미검증' : null;
+}
+
+/** 이 명제가 지금의 수정안에서 어떻게 됐는지 한 줄로 적는다(상세의 '이 문장에서 확인한 사실') */
+export function factNote(run: RunState, view: ClaimView): { text: string; tone: 'ok' | 'warn' | '' } {
+  const { id, sentenceId } = view.entry.claim;
+  if (view.state !== '완료' || view.verdict === null) {
+    if (view.state === '실패') return { text: `처리하지 못했습니다(${view.failure || '사유를 알 수 없음'})`, tone: 'warn' };
+    return { text: view.state === '진행 중' ? '검증하는 중입니다' : '아직 처리가 끝나지 않았습니다', tone: '' };
+  }
+  if (view.verdict === '일치') return { text: '고칠 것이 없습니다', tone: 'ok' };
+  const sentence = run.sentences.find((s) => s.id === sentenceId);
+  if (reviewOf(run, sentenceId).edited !== null) {
+    return sentence && recheckStatus(run, sentence) === '현재 문장 검증 완료'
+      ? { text: '고쳐 쓴 문장을 다시 검증한 결과는 아래에 있습니다', tone: '' }
+      : { text: '고쳐 쓴 문장은 아직 다시 검증하지 않았습니다', tone: 'warn' };
+  }
+  const entry = run.revisions[sentenceId];
+  const revision = entry?.state === '완료' ? entry.revision : null;
+  if (revision?.revised && revision.applied.includes(id)) return { text: '수정안에 반영했습니다', tone: 'ok' };
+  if (view.verdict === '직접 확인') return { text: '공개 자료로 확인할 수 없어, 직접 확인이 필요합니다', tone: 'warn' };
+  const skipped = revision?.skipped.find((s) => s.claimId === id);
+  if (skipped) return { text: `수정안에 넣지 못했습니다(${skipped.why})`, tone: 'warn' };
+  if (view.verdict === '근거 부족') return { text: '확인하지 못해 그대로 뒀습니다', tone: 'warn' };
+  const hasFix = view.judgment !== null && view.judgment.fix.kind !== '없음';
+  return { text: hasFix ? '고칠 내용은 있지만 수정안에 넣지 못했습니다' : '고칠 방향을 하나로 정하지 못해 그대로 뒀습니다', tone: 'warn' };
+}
+
+/**
+ * 내보낼 원고에서 이 명제가 풀렸는지. '일치'였거나, 채택한 수정안이 이 명제를 고쳤을 때다.
+ * 편집자가 고쳐 쓴 문장은 그 글을 다시 검증해 모두 '일치'가 나왔을 때만 풀린 것으로 본다.
+ */
+export function isResolved(run: RunState, view: ClaimView): boolean {
+  if (view.verdict === '일치') return true;
+  const { id, sentenceId } = view.entry.claim;
+  if (!isAdopted(run, sentenceId)) return false;
+  const edited = reviewOf(run, sentenceId).edited;
+  if (edited !== null) {
+    const recheck = run.rechecks?.[sentenceId];
+    return recheck?.state === '완료' && recheck.text === edited && recheck.claims.every((e) => viewOf(run, e).verdict === '일치');
+  }
+  return autoRevision(run, sentenceId)?.applied.includes(id) ?? false;
 }
 
 export interface UsageSummary {

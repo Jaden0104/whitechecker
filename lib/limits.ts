@@ -5,6 +5,8 @@ export const LIMITS = {
     inputChars: 800,
     /** 앞 문맥으로 함께 보내는 글자 수 */
     contextChars: 400,
+    /** 뒤 문맥으로 함께 보내는 글자 수. 한 문장만 다시 검증할 때 바로 뒤에 이어지는 한두 문장을 보낸다(F14) */
+    afterChars: 200,
     outputTokens: 6000,
   },
   gather: {

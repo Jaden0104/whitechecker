@@ -88,6 +88,16 @@
 .tag { font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; white-space: nowrap; }
 .tag.fix { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .tag.failed { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+/* 문장에 대한 편집자의 선택(F10) */
+.decision { font-size: 12px; font-weight: 650; border-radius: 5px; padding: 0 7px; white-space: nowrap; }
+.decision.d-adopt { background: var(--ok-soft); color: var(--ok); }
+.decision.d-hold { background: var(--unknown-soft); color: var(--unknown); }
+.decision.d-edit { background: var(--accent-soft); color: var(--accent); }
+/* 재검증 상태(F14) */
+.chip-state { font-size: 12px; border-radius: 999px; padding: 0 8px; border: 1px solid var(--line-strong); color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+.chip-state.busy { border-color: var(--accent); color: var(--accent); }
+.chip-state.done { border-color: var(--ok); color: var(--ok); }
+.chip-state.stale { border-color: var(--caution); color: var(--caution); }
 
 /* ---------- 판정표의 줄 ---------- */
 .rows { list-style: none; margin: 0; padding: 0; }
@@ -95,8 +105,10 @@
 .row:hover { background: #f8f9fb; }
 .row[aria-current="true"] { background: var(--accent-soft); }
 .row[aria-current="true"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-.row .head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; min-height: 20px; font-size: 12.5px; color: var(--ink-2); }
-.row .head .tag.fix { margin-left: auto; }
+/* 한 줄이 문장 하나다. 위쪽에 우선순위와 판정 표시를 나란히 두고, 오른쪽 끝에 수정안의 종류와 편집자의 선택을 둔다 */
+.row .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 4px; min-height: 20px; font-size: 12.5px; color: var(--ink-2); }
+.row .head .state { display: inline-flex; align-items: center; gap: 6px; }
+.row .head .push { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .row .text { font-weight: 500; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .row .meta { margin-top: 3px; font-size: 12.5px; color: var(--ink-3); }
 .row.pending .text { color: var(--ink-3); font-weight: 400; }
@@ -108,12 +120,13 @@
 .hint-row { padding: 28px 20px; color: var(--ink-3); font-size: 14px; text-align: center; }
 
 /* ---------- 상세 ---------- */
-.detail { max-width: 860px; }
-.detail .crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 8px; color: var(--ink-3); font-size: 13px; }
-.detail h2 { margin: 0 0 18px; font-size: 20px; line-height: 1.45; font-weight: 650; letter-spacing: -.01em; }
+.detail, .export { max-width: 860px; }
+.detail .crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 14px; color: var(--ink-3); font-size: 13px; }
+.detail h2, .export h2 { margin: 0 0 18px; font-size: 20px; line-height: 1.45; font-weight: 650; letter-spacing: -.01em; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
 .card > h3 { margin: 0 0 10px; font-size: 13px; font-weight: 650; color: var(--ink-3); letter-spacing: .02em; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .card > h3 .n { font-family: var(--mono); font-weight: 500; }
+.card > h3 .decision { margin-left: auto; }
 .pair { display: grid; grid-template-columns: 52px 1fr; gap: 6px 10px; align-items: baseline; font-size: 16px; line-height: 1.7; margin: 0; }
 .pair dt { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
 .pair dd { margin: 0; }
@@ -124,12 +137,52 @@ ins { background: var(--ins-bg); color: var(--ins-ink); text-decoration: underli
 .notes li::before { content: "·"; position: absolute; left: 5px; font-weight: 700; }
 .notes li.warn { color: var(--caution); }
 .notes li.busy { color: var(--accent); }
+
+/* 이 문장에서 확인한 사실: 사실마다 판정과, 수정안에서 어떻게 됐는지를 적는다. 겹치는 말은 흐리게, 서로 다른 대목은 굵게 */
+.facts { margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.facts h4, .recheck h4 { margin: 0 0 6px; font-size: 13px; font-weight: 650; color: var(--ink-3); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fact { display: grid; grid-template-columns: auto 1fr; gap: 1px 9px; align-items: start; width: 100%; text-align: left; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px; font-size: 14.5px; line-height: 1.5; }
+.fact:hover { background: #f6f7f9; }
+.fact[aria-current="true"] { background: var(--accent-soft); }
+.fact .what b { font-weight: 650; }
+.fact .common { color: var(--ink-3); }
+.fact .now { font-size: 12px; color: var(--accent); font-weight: 650; margin-left: 7px; white-space: nowrap; }
+.fact .state { grid-column: 2; font-size: 13px; color: var(--ink-2); }
+.fact .state.warn { color: var(--caution); }
+.fact .state.ok { color: var(--ok); }
+
+/* 채택, 고쳐 쓰기, 보류 */
+.decide { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.said { margin: 0 0 10px; font-size: 14px; color: var(--ink-2); }
+.said.ok { color: var(--ok); font-weight: 600; }
+.said.warn { color: var(--caution); }
+.said.quiet { color: var(--ink-3); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions .spacer { flex: 1; }
+.btn:disabled { opacity: .55; cursor: default; }
+.editor textarea { display: block; width: 100%; min-height: 104px; font: inherit; font-size: 16px; line-height: 1.7; color: inherit; border: 1.5px solid var(--accent); border-radius: 8px; padding: 10px 12px; resize: vertical; background: var(--surface); }
+.editor .hint { font-size: 13px; color: var(--ink-3); margin: 6px 0 10px; }
+
+/* 다시 검증한 결과: 요청할 때의 글에 묶어 문장 카드에 붙인다 */
+.recheck { margin-top: 12px; background: var(--bg); border-radius: 8px; padding: 11px 13px; font-size: 14.5px; }
+.recheck ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.recheck p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.recheck p.warn { color: var(--caution); }
+.recheck p.was { margin-bottom: 7px; font-size: 13px; color: var(--ink-3); }
+.recheck .rc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.recheck .rc-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.recheck .rc-reason { margin: 3px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.recheck details.more { margin-top: 4px; }
+.recheck .rc-evidence { margin-top: 8px; }
 .reason { margin: 0; font-size: 15.5px; line-height: 1.7; }
 .reason.quiet { color: var(--ink-3); }
+.reason.small { font-size: 14.5px; }
 .kv { margin: 12px 0 0; display: grid; grid-template-columns: 84px 1fr; gap: 6px 10px; font-size: 14px; }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; }
 .kv dd small { color: var(--ink-3); font-size: inherit; }
+/* 확인한 사실: 판정이 무엇에 대한 것인지 그 카드의 첫 줄에 적는다. 원문과 수정안보다 눈에 띄지 않게 보통 크기로 둔다 */
+.kv.fact-line { margin: 0 0 12px; padding-bottom: 11px; border-bottom: 1px solid var(--line); font-size: 15px; line-height: 1.6; }
 .ev { border-left: 3px solid var(--line-strong); padding: 2px 0 2px 12px; margin: 0 0 14px; }
 .ev:last-child { margin-bottom: 0; }
 .ev.r-support { border-left-color: var(--ok); }
@@ -161,6 +214,52 @@ details.more li { overflow-wrap: anywhere; }
 details.more code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .empty { color: var(--ink-3); padding: 60px 20px; text-align: center; }
 .back { display: none; }
+
+/* ---------- 원고 보기: 문장마다 가장 무거운 판정의 색과 뽑힌 명제 수를 보인다 ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-3); }
+.legend .wide { flex-basis: 100%; }
+.paper { padding: 18px 20px 40px; font-size: 16px; line-height: 2; }
+.paper h4, .preview h4 { font-size: 19px; margin: 0 0 12px; line-height: 1.5; }
+.paper h5, .preview h5 { font-size: 16px; margin: 18px 0 6px; }
+.paper p, .preview p { margin: 0 0 12px; }
+.paper ul, .preview ul { margin: 0 0 12px; padding-left: 20px; }
+.paper p.aside, .preview p.aside { color: var(--ink-2); font-size: 14.5px; }
+.sent { border-radius: 3px; padding: 2px 0; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.sent[role="button"] { cursor: pointer; }
+.sent.s-bad { background: var(--bad-soft); box-shadow: inset 0 -2px 0 var(--bad); }
+.sent.s-caution { background: var(--caution-soft); box-shadow: inset 0 -2px 0 var(--caution); }
+.sent.s-unknown { background: var(--unknown-soft); box-shadow: inset 0 -2px 0 var(--unknown); }
+.sent.s-direct { background: var(--direct-soft); box-shadow: inset 0 -2px 0 var(--direct); }
+.sent.s-ok { box-shadow: inset 0 -2px 0 #9fd0ae; }
+.sent.s-wait { color: var(--ink-3); box-shadow: inset 0 -2px 0 var(--line-strong); }
+p .sent.s-none, li .sent.s-none { box-shadow: inset 0 -1px 0 var(--line-strong); }
+.sent.adopted { background: transparent; box-shadow: inset 0 -2px 0 var(--ok); }
+/* 지금 열어 본 문장은 바탕을 남색 빛으로 바꿔 알린다(여러 줄에 걸쳐도 깨져 보이지 않게 테두리는 쓰지 않는다) */
+.sent[aria-current="true"] { background: #d9e5f6; }
+.cnt { font-family: var(--mono); font-size: 11px; color: var(--ink-3); vertical-align: super; margin: 0 2px 0 1px; }
+.cnt.zero { color: var(--bad); font-weight: 700; }
+.paper .decision { font-size: 11px; padding: 0 4px; margin-right: 3px; vertical-align: 2px; }
+
+/* ---------- 내보내기 ---------- */
+.export .lead { color: var(--ink-2); margin: -10px 0 16px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 13px 11px; }
+.tile b { display: block; font-size: 24px; line-height: 1.25; font-weight: 700; }
+.tile span { font-size: 12.5px; color: var(--ink-3); }
+.tile.warn b { color: var(--caution); }
+.tile.ok b { color: var(--ok); }
+.downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+.small-note { margin: 10px 0 0; font-size: 13px; color: var(--ink-3); }
+.todo { list-style: none; margin: 0; padding: 0; }
+.todo li { padding: 9px 0; border-top: 1px solid var(--line); font-size: 14.5px; overflow-wrap: anywhere; }
+.todo li:first-child { border-top: 0; padding-top: 0; }
+.todo .where { font-size: 12.5px; color: var(--ink-3); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 2px; }
+.todo .open { border: 0; background: transparent; color: var(--accent); font-weight: 600; font-size: 13px; padding: 0; margin-left: auto; }
+.todo .then { margin-top: 2px; color: var(--ink-2); }
+.todo .then .label { font-size: 12.5px; color: var(--ink-3); margin-right: 4px; }
+.preview { font-size: 15.5px; line-height: 1.95; }
+.preview h4 { font-size: 18px; }
+.record { margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border-radius: 8px; padding: 12px 14px; max-height: 360px; overflow: auto; color: var(--ink-2); }
 
 /* ---------- 직접 확인 목록 ---------- */
 .direct { padding: 14px 16px; border-bottom: 1px solid var(--line); }
@@ -214,10 +313,16 @@ details.more code { font-family: var(--mono); font-size: 12.5px; background: var
   .app.in-detail .side { display: none; }
   .app.in-detail .main { display: block; }
   .back { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: var(--accent); font-weight: 600; padding: 4px 0 10px; font-size: 14.5px; }
-  .detail h2 { font-size: 18px; }
+  .detail h2, .export h2 { font-size: 18px; }
   .card { padding: 14px; }
   .pair { grid-template-columns: 1fr; gap: 0; }
   .pair dt { margin-top: 6px; }
+  .actions .btn { flex: 1; padding: 9px 6px; }
+  .actions .spacer { display: none; }
+  .actions .quiet { flex-basis: 100%; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .downloads .btn { flex: 1 1 100%; }
+  .top-actions { flex-wrap: wrap; justify-content: flex-end; }
   .kv { grid-template-columns: 72px 1fr; }
   .ev .src { margin-left: 0; flex-basis: 100%; }
   .start { padding: 22px 16px 60px; }

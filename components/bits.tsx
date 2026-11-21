@@ -1,7 +1,7 @@
 // 화면 곳곳에서 쓰는 작은 조각들: 로고 묶음, 판정 표시, 우선순위 표시, 문장 글.
 import type { ReactNode } from 'react';
-import { inlineRuns } from '@/lib/client/text';
-import type { ItemState, Step } from '@/lib/run/model';
+import { diffPieces, inlineRuns } from '@/lib/client/text';
+import type { ItemState, ReviewEntry, Step } from '@/lib/run/model';
 import type { Priority, Verdict } from '@/lib/types';
 
 const ENGLISH_NAME = 'WhiteChecker';
@@ -37,8 +37,26 @@ const VERDICT_CLASS: Record<Verdict, string> = {
   '직접 확인': 'direct',
 };
 
-export function VerdictBadge({ verdict }: { verdict: Verdict }) {
-  return <span className={`verdict v-${VERDICT_CLASS[verdict]}`}>{verdict}</span>;
+/** 판정 표시. 한 문장에 같은 판정이 여럿이면 count로 그 수를 함께 적는다 */
+export function VerdictBadge({ verdict, count }: { verdict: Verdict; count?: number }) {
+  return (
+    <span className={`verdict v-${VERDICT_CLASS[verdict]}`}>
+      {verdict}
+      {count !== undefined && count > 1 ? ` ${count}` : ''}
+    </span>
+  );
+}
+
+/** 판정에 맞춘 색 이름. 원고 보기에서 문장에 밑줄 색을 입히는 데 쓴다 */
+export const verdictClass = (verdict: Verdict): string => VERDICT_CLASS[verdict];
+
+/** 문장에 대한 편집자의 선택(F10)을 작은 표시로 보여 준다. choiceOnly면 '고쳐 씀'은 빼고 채택과 보류만 */
+export function DecisionChip({ review, hasCandidate, choiceOnly }: { review: ReviewEntry; hasCandidate: boolean; choiceOnly?: boolean }) {
+  const edited = review.edited !== null;
+  if (review.choice === '채택' && hasCandidate) return <span className="decision d-adopt">{edited ? '채택(고쳐 씀)' : '채택'}</span>;
+  if (review.choice === '보류') return <span className="decision d-hold">보류</span>;
+  if (edited && !choiceOnly) return <span className="decision d-edit">고쳐 씀</span>;
+  return null;
 }
 
 const PRIORITY_CLASS: Record<Priority, string> = { 상: 'high', 중: 'mid', 하: 'low' };
@@ -72,6 +90,39 @@ export function StateBadge({ state, step, failure }: { state: ItemState; step: S
     );
   }
   return <span className="tag">{state}</span>;
+}
+
+/**
+ * 두 문장을 견줘 달라진 곳을 표시한다. 편집자가 고쳐 쓴 문장처럼 바꾼 대목을 따로 받지 못한 글에 쓴다.
+ * side가 before면 앞 글에 뺀 곳만, after면 뒤 글에 넣은 곳만, both면 한 줄에 둘 다 보인다.
+ */
+export function DiffText({ before, after, side }: { before: string; after: string; side: 'before' | 'after' | 'both' }) {
+  const pieces = diffPieces(before, after).filter((p) => p.kind === 'same' || side === 'both' || (side === 'before' ? p.kind === 'removed' : p.kind === 'added'));
+  return (
+    <>
+      {pieces.map((piece, i) => {
+        let node: ReactNode = piece.text;
+        if (piece.link) node = <u>{node}</u>;
+        if (piece.bold) node = <strong>{node}</strong>;
+        if (piece.kind === 'removed') node = <del>{node}</del>;
+        else if (piece.kind === 'added') node = <ins>{node}</ins>;
+        return <span key={i}>{node}</span>;
+      })}
+    </>
+  );
+}
+
+/** 명제의 글. 같은 문장의 다른 명제와 겹치는 앞뒤 말은 흐리게, 서로 다른 대목은 굵게 적는다 */
+export function PartsText({ text, head, tail }: { text: string; head: number; tail: number }) {
+  if (head === 0 && tail === 0) return <>{text}</>;
+  const end = text.length - tail;
+  return (
+    <>
+      <span className="common">{text.slice(0, head)}</span>
+      <b>{text.slice(head, end)}</b>
+      <span className="common">{text.slice(end)}</span>
+    </>
+  );
 }
 
 /** 원고에 적힌 꼴의 문장을 그린다. 굵은 글씨와 링크는 모양으로 보이고, marks의 범위는 고친 대목으로 표시한다 */

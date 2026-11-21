@@ -6,7 +6,7 @@
 // - 실패한 단계만 다시 한다. 이미 모은 근거가 있으면 다시 검색하지 않는다(F16).
 // - '직접 확인'으로 분류됐지만 유형이 내부 수치나 비공개 취재가 아니면 검색을 한 번 해 본 뒤 확정한다(F9).
 // - 멈추거나 기록을 지운 뒤에 늦게 도착한 응답은 저장하지 않는다(F17).
-import { buildExtractChunks } from '../chunks.ts';
+import { buildExtractChunks, followingText } from '../chunks.ts';
 import { LIMITS } from '../limits.ts';
 import { planMerge, unresolvedAfter } from '../merge/plan.ts';
 import type { ExtractInput } from '../prompts/extract.ts';
@@ -191,7 +191,10 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
       if (!alive()) return;
       const chunk = snapshot().chunks[index];
       setChunk(index, { state: '진행 중', failure: '' });
-      const result = await api.extract({ title: chunk.title, context: chunk.context, sentences: chunk.sentences }, signal);
+      const result = await api.extract(
+        { title: chunk.title, context: chunk.context, sentences: chunk.sentences, ...(chunk.after ? { after: chunk.after } : {}) },
+        signal,
+      );
       if (!alive()) return;
       if (result.ok) {
         update((run) => {
@@ -219,7 +222,10 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
       }
       const half = Math.ceil(chunk.sentences.length / 2);
       const firstHalf = chunk.sentences.slice(0, half);
-      const first: ChunkEntry = { ...chunk, sentences: firstHalf, state: '대기', failure: '', split: true };
+      // 앞쪽 반의 뒤 문맥은 뒤쪽 반의 앞부분이다. 뒤쪽 반은 원래 묶음의 뒤 문맥을 그대로 쓴다
+      const afterFirst = followingText(snapshot().sentences, firstHalf[firstHalf.length - 1].id);
+      const { after: _whole, ...rest } = chunk;
+      const first: ChunkEntry = { ...rest, ...(afterFirst ? { after: afterFirst } : {}), sentences: firstHalf, state: '대기', failure: '', split: true };
       const second: ChunkEntry = {
         ...chunk,
         sentences: chunk.sentences.slice(half),

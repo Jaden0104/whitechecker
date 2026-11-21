@@ -70,9 +70,17 @@ export interface ExtractInput {
   title: string;
   context: string;
   sentences: Array<{ id: number; text: string }>;
+  /**
+   * 번호가 붙은 문장의 바로 뒤에 이어지는 글. 한 문장만 다시 검증할 때 보낸다(F14).
+   * 처음 검증할 때는 문단을 묶어 보내므로 뒤 문장이 번호가 붙은 문장으로 함께 간다. 그때는 이 값을 쓰지 않는다.
+   */
+  after?: string;
 }
 
 export function extractUserMessage(input: ExtractInput): string {
   const lines = input.sentences.map((s) => `[${s.id}] ${s.text}`).join('\n');
-  return `제목: ${input.title || '(없음)'}\n\n앞 문맥: ${input.context || '(없음)'}\n\n번호가 붙은 문장:\n${lines}`;
+  const head = `제목: ${input.title || '(없음)'}\n\n앞 문맥: ${input.context || '(없음)'}\n\n번호가 붙은 문장:\n${lines}`;
+  // 뒤 문맥이 없으면 글이 전과 한 글자도 다르지 않다. 처음 검증의 동작을 건드리지 않기 위해서다
+  if (!input.after) return head;
+  return `${head}\n\n뒤 문맥(번호가 붙은 문장의 바로 뒤에 이어지는 글입니다. 지시어와 시점을 푸는 데만 쓰고, 여기서는 명제를 뽑지 않습니다): ${input.after}`;
 }

@@ -72,6 +72,82 @@ export function editRanges(
   return { removed, added };
 }
 
+export interface DiffPiece {
+  kind: 'same' | 'removed' | 'added';
+  text: string;
+  bold: boolean;
+  link: boolean;
+}
+
+/** 견줄 때의 단위: 빈칸, 숫자, 영문 낱말, 한글 낱말, 그 밖의 기호 하나 */
+const UNITS = /\s+|\d+(?:[.,]\d+)*|[A-Za-z]+|[가-힣]+|[^\s\dA-Za-z가-힣]/g;
+
+function styledUnits(source: string): Array<{ text: string; bold: boolean; link: boolean }> {
+  const out: Array<{ text: string; bold: boolean; link: boolean }> = [];
+  for (const run of inlineRuns(source)) for (const text of run.text.match(UNITS) ?? []) out.push({ text, bold: run.bold, link: run.link });
+  return out;
+}
+
+/**
+ * 두 문장을 숫자와 낱말 단위로 견줘, 같은 곳과 뺀 곳과 넣은 곳을 차례로 돌려준다.
+ * 편집자가 고쳐 쓴 문장처럼 '어느 대목을 바꿨는지'를 따로 받지 못한 글에 쓴다.
+ * 굵은 글씨와 링크의 표시(**, [글](주소))는 감춘 채로 견주고, 조각마다 모양만 알려 준다.
+ */
+export function diffPieces(before: string, after: string): DiffPiece[] {
+  const a = styledUnits(before);
+  const b = styledUnits(after);
+  const n = a.length;
+  const m = b.length;
+  // 가장 긴 공통 부분열의 길이를 뒤에서부터 채운다
+  const table: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let k = m - 1; k >= 0; k -= 1) table[i][k] = a[i].text === b[k].text ? table[i + 1][k + 1] + 1 : Math.max(table[i + 1][k], table[i][k + 1]);
+  }
+  const pieces: DiffPiece[] = [];
+  const push = (kind: DiffPiece['kind'], unit: { text: string; bold: boolean; link: boolean }) => {
+    const last = pieces[pieces.length - 1];
+    if (last && last.kind === kind && last.bold === unit.bold && last.link === unit.link) last.text += unit.text;
+    else pieces.push({ kind, ...unit });
+  };
+  let i = 0;
+  let k = 0;
+  while (i < n || k < m) {
+    if (i < n && k < m && a[i].text === b[k].text) {
+      push('same', b[k]);
+      i += 1;
+      k += 1;
+    } else if (i < n && (k === m || table[i + 1][k] >= table[i][k + 1])) {
+      push('removed', a[i]);
+      i += 1;
+    } else {
+      push('added', b[k]);
+      k += 1;
+    }
+  }
+  return pieces;
+}
+
+/**
+ * 같은 문장에서 나온 명제들의 앞뒤로 겹치는 말의 길이.
+ * 겹치는 말을 흐리게 적으면 명제마다 다른 대목(세로 311cm, 가로 223cm)이 눈에 들어온다.
+ */
+export function sharedEnds(statements: string[]): { head: number; tail: number } {
+  if (statements.length < 2) return { head: 0, tail: 0 };
+  const first = statements[0];
+  const shortest = Math.min(...statements.map((s) => s.length));
+  let head = 0;
+  while (head < shortest && statements.every((s) => s[head] === first[head])) head += 1;
+  // 낱말 한가운데에서 끊지 않게 앞쪽 빈칸까지 물린다
+  while (head > 0 && first[head - 1] !== ' ') head -= 1;
+  let tail = 0;
+  while (tail < shortest - head && statements.every((s) => s[s.length - 1 - tail] === first[first.length - 1 - tail])) tail += 1;
+  // 숫자 뒤의 단위(cm, % 등)는 흐리게 하지 않고 숫자에 붙여 둔다
+  if (tail > 0 && /\d/.test(first[first.length - tail - 1] ?? '')) {
+    tail -= (first.slice(first.length - tail).match(/^[A-Za-z%㎝㎜㎞℃]+/) ?? [''])[0].length;
+  }
+  return { head, tail };
+}
+
 /** 근거 발췌에서 인용문과 그 앞뒤 문맥을 잘라 낸다. 띄어쓰기만 다른 인용문도 찾는다 */
 export function quoteContext(excerpt: string, quote: string, around = 70): { before: string; quote: string; after: string; found: boolean } {
   let start = quote ? excerpt.indexOf(quote) : -1;
