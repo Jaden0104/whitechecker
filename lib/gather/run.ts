@@ -225,7 +225,9 @@ export async function gatherEvidence(
             .map((c) => {
               const page = opened.find((p) => p.candidate === c);
               const outcome = !page
-                ? c.skip || '열지 않음'
+                ? c.skip
+                  ? `열지 않음(${c.skip})`
+                  : '열지 않음'
                 : page.outcome.status === '실패'
                   ? `열지 못함(${page.outcome.reason})`
                   : page.outcome.status === '성공' && !page.direct

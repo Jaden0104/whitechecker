@@ -149,6 +149,7 @@ mark { background: var(--mark); color: var(--ink); border-radius: 3px; padding: 
 .grade.g1 { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .grade.g2 { color: var(--ink-2); border-color: var(--line-strong); }
 .grade.g3 { color: var(--ink-3); border-color: var(--line); border-style: dashed; }
+.grade.gx { color: var(--ink-3); border-color: var(--line); background: var(--bg); }
 .source .who { font-weight: 600; }
 .source .who span { font-weight: 400; color: var(--ink-3); }
 .source a { color: var(--accent); text-decoration: none; font-size: 13px; word-break: break-all; }

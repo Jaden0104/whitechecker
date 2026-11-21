@@ -35,7 +35,8 @@ export interface Standard {
   updated: string;
   about: string;
   references: Array<{ name: string; publisher: string; url: string; checked: string; used: string }>;
-  documentTypes: Array<{ id: string; grade: Grade; gradeOutsideRole?: Grade; about: string; role?: string }>;
+  /** notEvidence가 true인 종류(위키)는 판정의 근거로 쓰지 않는다 */
+  documentTypes: Array<{ id: string; grade: Grade; gradeOutsideRole?: Grade; notEvidence?: boolean; about: string; role?: string }>;
   requirements: Record<ClaimType, Requirement>;
   qualifiers: string[];
   /** 출처를 밝히지 않고 흐리는 말. 수정안에 이런 말이 새로 들어가면 알린다 */
@@ -69,14 +70,19 @@ export function institutionOf(hostname: string): string {
   return STANDARD.domains.institutions.find((i) => hostMatches(hostname, i.domain))?.publisher ?? '';
 }
 
-/** 블로그, 위키, 커뮤니티 플랫폼인지. 여기에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다 */
+/** 블로그, 커뮤니티 플랫폼인지. 여기에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다 */
 export function isLowGradePlatform(hostname: string): boolean {
   return STANDARD.domains.lowGradePlatforms.some((d) => hostMatches(hostname, d));
 }
 
-/** 열지 않는 사이트(동영상 등)면 그 이유, 아니면 빈 문자열 */
+/** 열지 않는 사이트(동영상, 위키)면 그 이유, 아니면 빈 문자열. 이런 곳의 글은 판정의 근거로도 쓰지 않는다 */
 export function excludedReason(hostname: string): string {
   return STANDARD.domains.excluded.find((e) => hostMatches(hostname, e.domain))?.why ?? '';
+}
+
+/** 판정의 근거로 쓰지 않는 문서 종류(위키)인지. 목록에 없는 위키를 열었을 때 모델이 고른 종류로 걸러 낸다 */
+export function notEvidenceDocType(docType: string): boolean {
+  return STANDARD.documentTypes.some((d) => d.id === docType && d.notEvidence === true);
 }
 
 /**
@@ -116,7 +122,7 @@ export function isDocType(id: string): boolean {
 /**
  * 판정에 쓰는 등급. 문서 종류와, 그 명제에 대해 출처가 맡는 역할로 정한다.
  * @param ownFact 그 기관이 직접 정하거나 관리하는 사실인지(기관의 공식 안내에만 뜻이 있다)
- * @param lowPlatform 블로그, 위키, 커뮤니티 플랫폼의 글인지. 그러면 문서 종류와 상관없이 3등급이다
+ * @param lowPlatform 블로그, 커뮤니티 플랫폼의 글인지. 그러면 문서 종류와 상관없이 3등급이다
  */
 export function finalGrade(docType: string, ownFact: boolean, lowPlatform: boolean): Grade {
   if (lowPlatform) return 3;

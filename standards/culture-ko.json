@@ -1,7 +1,7 @@
 {
   "id": "culture-ko",
   "name": "문화·교양 기본 기준",
-  "version": "0.2",
+  "version": "0.3",
   "updated": "2026-11-21",
   "about": "문화유산, 박물관, 전시·행사 안내처럼 문화·교양 분야의 글을 발행 전에 확인할 때 쓰는 기준이다. 공개된 팩트체크 원칙과 작성자의 편집 경험을 바탕으로 2026년 11월에 새로 썼다. 이 파일을 바꿔 끼우면 코드를 고치지 않고 다른 기준으로 동작한다.",
   "references": [
@@ -49,7 +49,7 @@
     { "id": "백과사전", "grade": 2, "about": "편집 책임이 있는 백과사전의 항목" },
     { "id": "학술 논문", "grade": 2, "about": "학술지 논문, 학위 논문, 연구 보고서" },
     { "id": "언론 보도", "grade": 3, "about": "신문, 방송, 통신사의 기사" },
-    { "id": "위키", "grade": 3, "about": "누구나 고칠 수 있는 위키 문서" },
+    { "id": "위키", "grade": 3, "notEvidence": true, "about": "누구나 고칠 수 있는 위키 문서. 판정의 근거로 쓰지 않는다" },
     { "id": "블로그·커뮤니티 글", "grade": 3, "about": "개인 블로그, 카페, 게시판, 사회관계망의 글" },
     { "id": "관광 안내", "grade": 3, "about": "관광 안내 사이트와 여행 정보" },
     { "id": "그 밖의 글", "grade": 3, "about": "위 어디에도 맞지 않는 글" }
@@ -137,7 +137,8 @@
     "가장, 최초, 유일 같은 표현은 범위까지 같아야 한다. 출처가 '우리나라에서 가장'이라고 쓴 것은 '세계에서 가장'을 뒷받침하지 못한다. 더 앞서거나 더 큰 다른 사례를 보여 주는 자료는 반례다",
     "연대는 음력과 양력의 차이로 한 해가 어긋나 보일 수 있다. 자료가 그 차이를 설명하고 있으면 엇갈린 것으로 보지 않는다",
     "따옴표로 옮긴 말은 원문에 그 말이 그대로 있어야 지지다. 뜻이 비슷한 다른 문장이 있는 것만으로는 지지가 아니다",
-    "출처 둘이 서로 독립인지는 각자 무엇에 기대는지로 본다. 같은 원자료(같은 조사, 같은 발표, 같은 원전, 같은 기관의 설명)에 기대면 발행처와 문장이 달라도 독립이 아니다. 서로 다른 근거에 기댄다는 단서가 발췌에 없으면 '독립 추정'으로 적지 않는다. 같은 원자료에 기댄다고 보면서 '독립 추정'으로 적는 일이 없게 한다"
+    "출처 둘이 서로 독립인지는 각자 무엇에 기대는지로 본다. 같은 원자료(같은 조사, 같은 발표, 같은 원전, 같은 기관의 설명)에 기대면 발행처와 문장이 달라도 독립이 아니다. 서로 다른 근거에 기댄다는 단서가 발췌에 없으면 '독립 추정'으로 적지 않는다. 같은 원자료에 기댄다고 보면서 '독립 추정'으로 적는 일이 없게 한다",
+    "위키 문서는 판정의 근거로 쓰지 않는다. 누구나 고칠 수 있고, 원고가 그 글을 보고 쓴 것일 수 있어 원고와 같은 내용이어도 확인이 되지 못한다. 위키의 발췌는 근거로 적지 않고, 판정과 고칠 내용을 위키에 기대어 정하지 않는다"
   ],
   "priority": {
     "about": "고치기 쉬운지가 아니라 글에 미치는 영향으로 매긴다",
@@ -146,7 +147,7 @@
     "low": ["표기나 명칭을 적는 방식처럼 뜻에 미치는 영향이 작은 것"]
   },
   "domains": {
-    "about": "도메인은 두 가지에만 쓴다. 기관 목록은 글을 낸 곳을 확인하는 데 돕고, 낮은 등급 플랫폼 목록에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다. 목록에 없는 도메인이라는 이유만으로 등급을 낮추지 않는다",
+    "about": "도메인은 세 가지에만 쓴다. 기관 목록은 글을 낸 곳을 확인하는 데 돕고, 낮은 등급 플랫폼 목록에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다. 열지 않는 사이트 목록에 있는 곳(동영상, 위키)은 열지 않고 판정의 근거로도 쓰지 않는다. 목록에 없는 도메인이라는 이유만으로 등급을 낮추지 않는다",
     "institutions": [
       { "domain": "heritage.go.kr", "publisher": "국가유산청(국가유산포털)" },
       { "domain": "khs.go.kr", "publisher": "국가유산청" },
@@ -174,7 +175,6 @@
     "lowGradePlatforms": [
       "blog.naver.com", "cafe.naver.com", "post.naver.com", "kin.naver.com", "tistory.com", "brunch.co.kr",
       "velog.io", "medium.com", "blogspot.com", "wordpress.com", "tumblr.com", "cafe.daum.net",
-      "wikipedia.org", "namu.wiki", "wikiwand.com", "fandom.com", "librewiki.net",
       "dcinside.com", "ruliweb.com", "clien.net", "fmkorea.com", "theqoo.net", "instiz.net", "reddit.com", "quora.com",
       "x.com", "twitter.com", "facebook.com", "instagram.com", "threads.net", "pinterest.com"
     ],
@@ -184,7 +184,22 @@
       { "domain": "tv.naver.com", "why": "동영상" },
       { "domain": "tv.kakao.com", "why": "동영상" },
       { "domain": "tiktok.com", "why": "동영상" },
-      { "domain": "vimeo.com", "why": "동영상" }
+      { "domain": "vimeo.com", "why": "동영상" },
+      { "domain": "wikipedia.org", "why": "위키" },
+      { "domain": "wikiwand.com", "why": "위키" },
+      { "domain": "wikisource.org", "why": "위키" },
+      { "domain": "wiktionary.org", "why": "위키" },
+      { "domain": "wikiquote.org", "why": "위키" },
+      { "domain": "wikibooks.org", "why": "위키" },
+      { "domain": "wikidata.org", "why": "위키" },
+      { "domain": "wikimedia.org", "why": "위키" },
+      { "domain": "namu.wiki", "why": "위키" },
+      { "domain": "namu.moe", "why": "위키" },
+      { "domain": "thewiki.kr", "why": "위키" },
+      { "domain": "librewiki.net", "why": "위키" },
+      { "domain": "femiwiki.com", "why": "위키" },
+      { "domain": "uncyclopedia.kr", "why": "위키" },
+      { "domain": "fandom.com", "why": "위키" }
     ],
     "provisional": {
       "about": "원문을 열기 전에 어느 페이지부터 열지 정하는 데만 쓰는 어림이다. 판정에 쓰는 등급이 아니다",

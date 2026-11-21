@@ -101,7 +101,8 @@ function EvidenceItem({ use, view }: { use: EvidenceUse; view: ClaimView }) {
   const fit = fits ? '적용 가능' : `대상 ${use.target} · 범위 ${use.scope} · 시점 ${use.time}`;
   const publisher = info?.publisherHint || rating?.publisher || info?.hostname || '';
   let unused = '';
-  if (!use.quoteFound) unused = '인용문을 발췌에서 찾지 못해 판정에 쓰지 않았습니다.';
+  if (rating?.notUsed) unused = `${rating.notUsed} 자료라 판정에 쓰지 않았습니다.`;
+  else if (!use.quoteFound) unused = '인용문을 발췌에서 찾지 못해 판정에 쓰지 않았습니다.';
   else if (!use.usable && use.relation !== '판단 불충분') unused = '이 명제에 적용할 수 없는 근거라 판정에 쓰지 않았습니다.';
   return (
     <div className={`ev ${RELATION_CLASS[use.relation] ?? ''}`}>
@@ -111,7 +112,7 @@ function EvidenceItem({ use, view }: { use: EvidenceUse; view: ClaimView }) {
         <span>{fit}</span>
         <span className="src">
           출처 {use.sourceNo}
-          {rating ? ` · ${rating.grade}등급` : ''}
+          {rating ? ` · ${rating.notUsed || `${rating.grade}등급`}` : ''}
           {publisher ? ` · ${publisher}` : ''}
         </span>
       </div>
@@ -287,11 +288,12 @@ export function ClaimDetail({ run, view, onBack }: Props) {
               const twinNo = twin ? (twin.a === s.sourceNo ? twin.b : twin.a) : null;
               return (
                 <div key={s.sourceNo} className="source">
-                  <span className={`grade g${s.grade}`}>{s.grade}등급</span>
+                  <span className={`grade ${s.notUsed ? 'gx' : `g${s.grade}`}`}>{s.notUsed ? '제외' : `${s.grade}등급`}</span>
                   <div className="who">
                     {info?.publisherHint || s.publisher || info?.hostname}{' '}
                     <span>
                       · {s.docType}
+                      {s.notUsed ? ` · 판정에 쓰지 않음${s.notUsed !== s.docType ? `(${s.notUsed})` : ''}` : ''}
                       {s.ownFact ? ' · 직접 정하는 사실' : ''}
                       {twinNo ? ` · 출처 ${twinNo}와 같은 자료로 봄` : ''}
                       {s.publisherUnlisted ? ' · 발행 주체 확인 필요' : ''}

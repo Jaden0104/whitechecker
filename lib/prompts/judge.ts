@@ -1,6 +1,6 @@
 // 판정 단계의 지시문과 출력 형식. 대회 기간에 새로 쓴 것이다.
 // 문서 종류의 목록, 우선순위 기준, 판정 지침은 검증 기준 파일에서 가져와 끼워 넣는다.
-import { STANDARD } from '../standard.ts';
+import { STANDARD, excludedReason } from '../standard.ts';
 import type { ClaimType, EvidenceBundle } from '../types.ts';
 
 const docTypeLines = STANDARD.documentTypes.map((d) => `  - ${d.id}: ${d.about}`).join('\n');
@@ -195,6 +195,8 @@ export function judgeUserMessage(input: JudgeMessageInput): string {
 
   const blocks: string[] = [];
   for (const source of bundle.sources) {
+    // 열지 않기로 한 사이트(위키 등)의 글은 모델에 보여 주지 않는다. 기준을 바꾸기 전에 모은 묶음에 남아 있을 수 있다
+    if (excludedReason(source.hostname)) continue;
     const items = bundle.evidence.filter((e) => e.sourceNo === source.no);
     if (items.length === 0) continue;
     const notes = [
@@ -204,7 +206,7 @@ export function judgeUserMessage(input: JudgeMessageInput): string {
       `페이지가 밝힌 날짜 ${source.pageDate ?? '없음'}`,
     ];
     if (source.publisherHint) notes.push(`기관 목록: ${source.publisherHint}`);
-    if (source.lowPlatform) notes.push('블로그·위키·커뮤니티 플랫폼');
+    if (source.lowPlatform) notes.push('블로그·커뮤니티 플랫폼');
     blocks.push(`[출처 ${source.no}] ${notes.join(' | ')}`);
     for (const item of items) blocks.push(`[근거 ${item.no}] (출처 ${source.no})\n${item.text}`);
   }

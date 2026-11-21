@@ -10,7 +10,7 @@ function expect(label, actual, wanted) {
   console.log(`${ok ? '통과' : '실패'}  ${label}${ok ? '' : `  (기대 ${wanted}, 실제 ${actual})`}`);
 }
 
-// 출처 네 곳: 기관(목록에 있음), 백과, 블로그 플랫폼, 언론
+// 출처: 기관(목록에 있음), 백과, 블로그 플랫폼, 언론 둘, 논문, 목록에 없는 위키, 기준을 바꾸기 전에 모은 묶음에 남은 위키백과
 const SOURCES = [
   { no: 1, hostname: 'www.gogung.go.kr', publisherHint: '국립고궁박물관', lowPlatform: false },
   { no: 2, hostname: 'encykorea.aks.ac.kr', publisherHint: '한국학중앙연구원', lowPlatform: false },
@@ -18,6 +18,8 @@ const SOURCES = [
   { no: 4, hostname: 'www.example-news.co.kr', publisherHint: '', lowPlatform: false },
   { no: 5, hostname: 'www.another-news.co.kr', publisherHint: '', lowPlatform: false },
   { no: 6, hostname: 'www.kci.go.kr', publisherHint: '', lowPlatform: false },
+  { no: 7, hostname: 'wiki.example.org', publisherHint: '', lowPlatform: false },
+  { no: 8, hostname: 'ko.wikipedia.org', publisherHint: '', lowPlatform: true },
 ].map((s) => ({
   ...s,
   url: `https://${s.hostname}/a`,
@@ -36,6 +38,8 @@ const TEXTS = {
   4: '박물관은 오전 10시부터 오후 6시까지 문을 연다고 밝혔다.',
   5: '박물관 관람 시간은 오전 10시부터 오후 6시까지다.',
   6: '태조본 각석은 1395년에 제작되었다. 이 연구는 각석을 직접 조사했다.',
+  7: '각석의 크기는 세로 311cm이다. 태조 때 만든 석각천문도로 세계에서 가장 오래되었다.',
+  8: '천상열차분야지도 각석의 세로는 311cm이다.',
 };
 const bundleOf = (nos) => ({
   v: 1,
@@ -47,7 +51,8 @@ const bundleOf = (nos) => ({
   extraSearch: { done: false, reason: '' },
   premium: [],
 });
-const DOC = { 1: '기관의 공식 안내', 2: '백과사전', 3: '블로그·커뮤니티 글', 4: '언론 보도', 5: '언론 보도', 6: '학술 논문' };
+// 8번은 모델이 위키백과를 백과사전으로 잘못 골랐다고 친다
+const DOC = { 1: '기관의 공식 안내', 2: '백과사전', 3: '블로그·커뮤니티 글', 4: '언론 보도', 5: '언론 보도', 6: '학술 논문', 7: '위키', 8: '백과사전' };
 const ev = (no, relation, quote, over = {}) => ({ evidence_no: no, relation, target: '적용 가능', scope: '적용 가능', time: '적용 가능', quote, ...over });
 function model(verdict, evidence, over = {}) {
   return {
@@ -142,6 +147,32 @@ j = run('제원·실측', wrongSize, model('불일치', mixed, { conflict: fixed
 expect('바로잡은 구절이 발췌에 있고 1등급이면 그쪽을 따른다', `${j.verdict}/${j.conflict.resolved}`, '불일치/true');
 j = run('제원·실측', wrongSize, model('불일치', mixed, { conflict: { ...fixed, correcting_quote: '앞서 적은 크기를 바로잡습니다' } }));
 expect('바로잡았다는 구절이 발췌에 없으면 해석 주의', j.verdict, '해석 주의');
+
+console.log('\n[위키는 판정의 근거로 쓰지 않는다]');
+j = run('제원·실측', wrongSize, model('일치', [ev(7, '지지', '세로 311cm이다')]));
+expect('위키의 지지뿐이면 근거 부족(2번)', `${j.verdict}/${j.lowered?.rule}`, '근거 부족/2번');
+expect('  바꾼 까닭에 위키라고 적는다', j.lowered?.note.includes('위키'), true);
+expect('  그 출처에 쓰지 않는 까닭을 남긴다', j.sources[0].notUsed, '위키');
+expect('  그 근거는 판정에 쓰지 않은 것으로 남긴다', j.evidence[0].usable, false);
+j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝'), ev(7, '지지', '세로 311cm이다')], { fix: { kind: '교정안', instruction: '세로 311cm를 211cm로 고친다', source_no: 0 } }));
+expect('1등급 반박과 위키의 지지가 함께 있어도 불일치(엇갈린 것으로 보지 않는다)', `${j.verdict}/${j.conflict.found}/${j.fix.kind}`, '불일치/false/교정안');
+j = run('제원·실측', '각석의 세로는 211cm다', model('일치', [ev(1, '지지', '세로: 211㎝'), ev(7, '반박', '세로 311cm이다')]));
+expect('1등급 지지와 위키의 반박이 함께 있어도 일치', `${j.verdict}/${j.conflict.found}`, '일치/false');
+j = run('제원·실측', '각석의 세로는 211cm다', model('불일치', [ev(7, '반박', '세로 311cm이다')], { fix: { kind: '교정안', instruction: '211cm를 311cm로 고친다', source_no: 0 } }));
+expect('위키의 반박뿐이면 근거 부족(2번), 교정안 없음', `${j.verdict}/${j.lowered?.rule}/${j.fix.kind}`, '근거 부족/2번/없음');
+j = run(
+  '최상급',
+  '각석은 세계에서 가장 오래된 천문도다',
+  model('해석 주의', [ev(7, '지지', '세계에서 가장 오래되었다', { scope: '미확인' })], {
+    qualifiers: [{ text: '가장', result: '확인하지 못했다', note: '' }],
+    fix: { kind: '축소안', instruction: "'세계에서 가장'을 뺀다", source_no: 0 },
+  }),
+);
+expect('같은 대상을 다룬 자료가 위키뿐이면 해석 주의도 축소안도 두지 않는다', `${j.verdict}/${j.fix.kind}`, '근거 부족/없음');
+j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝'), ev(8, '지지', '세로는 311cm이다')]));
+expect('예전 묶음에 남은 위키백과는 모델이 백과사전이라고 해도 쓰지 않는다', `${j.verdict}/${j.sources.find((s) => s.sourceNo === 8)?.notUsed}`, '불일치/위키');
+j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝'), ev(3, '지지', '세로 311cm라고 한다')]));
+expect('블로그 플랫폼의 글은 전과 같이 3등급 근거로 센다(엇갈리면 해석 주의)', `${j.verdict}/${j.sources.find((s) => s.sourceNo === 3)?.notUsed}`, '해석 주의/undefined');
 
 console.log('\n[수정 방향과 우선순위]');
 j = run('최상급', '각석은 세계에서 가장 오래된 천문도다', model('해석 주의', [ev(2, '반박', '세계에서 두 번째로 오래된', { scope: '미확인' })], { fix: { kind: '인용형', instruction: '블로그의 설명임을 밝힌다', source_no: 3 } }));

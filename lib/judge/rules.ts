@@ -1,7 +1,7 @@
 // 모델의 판정을 그대로 믿지 않고 코드가 다시 검사한다(PRD 5.3절의 규칙 1~7번).
 // 이 파일의 함수는 Liner를 부르지 않는다. 모델의 답과 근거 묶음만 받아 판정을 확정한다.
 import type { ModelJudgment } from '../prompts/judge.ts';
-import { FALLBACK_DOC_TYPE, STANDARD, finalGrade, isDocType, type RequirementOption } from '../standard.ts';
+import { FALLBACK_DOC_TYPE, STANDARD, excludedReason, finalGrade, isDocType, notEvidenceDocType, type RequirementOption } from '../standard.ts';
 import type {
   Applicability,
   ClaimType,
@@ -79,6 +79,9 @@ export function applyRules(input: RuleInput): Judgment {
     const docType = rated && isDocType(rated.doc_type) ? rated.doc_type : FALLBACK_DOC_TYPE;
     const ownFact = Boolean(rated?.own_fact);
     const grade = finalGrade(docType, ownFact, info.lowPlatform);
+    // 판정의 근거로 쓰지 않는 자료: 열지 않기로 한 사이트의 글(기준을 바꾸기 전에 모은 묶음에 남아 있을 수 있다)과,
+    // 모델이 '위키'로 본 글(목록에 없는 위키를 열었을 때)
+    const notUsed = excludedReason(info.hostname) || (notEvidenceDocType(docType) ? docType : '');
     sources.push({
       sourceNo: no,
       docType,
@@ -86,10 +89,13 @@ export function applyRules(input: RuleInput): Judgment {
       ownFact,
       grade,
       publisherUnlisted: grade === 1 && !info.publisherHint,
+      ...(notUsed ? { notUsed } : {}),
     });
   }
   const ratingOf = (no: number) => sources.find((s) => s.sourceNo === no);
   const gradeOf = (no: number): Grade => ratingOf(no)?.grade ?? 3;
+  /** 판정의 근거로 쓰지 않는 자료면 그 까닭(예: 위키), 아니면 빈 문자열 */
+  const setAside = (no: number): string => ratingOf(no)?.notUsed ?? '';
 
   // 출처 사이의 관계: 중복은 한 출처로 세고, '독립 추정'인 쌍만 서로 독립인 것으로 본다
   const links: SourceLink[] = [];
@@ -105,7 +111,8 @@ export function applyRules(input: RuleInput): Judgment {
     rootOf(a) !== rootOf(b) &&
     links.some((l) => l.status === '독립 추정' && ((l.a === a && l.b === b) || (l.a === b && l.b === a)));
 
-  // 1번, 4번, 5번: 인용문이 그 번호의 발췌에 있어야 하고, 대상·범위·시점이 모두 적용 가능해야 판정에 쓴다
+  // 1번, 4번, 5번: 인용문이 그 번호의 발췌에 있어야 하고, 대상·범위·시점이 모두 적용 가능해야 판정에 쓴다.
+  // 위키처럼 근거로 쓰지 않는 자료의 발췌는 지지로도 반박으로도 세지 않는다(2번)
   const evidence: EvidenceUse[] = [];
   for (const e of model.evidence ?? []) {
     const cited = evidenceByNo.get(e.evidence_no);
@@ -141,7 +148,7 @@ export function applyRules(input: RuleInput): Judgment {
       quote,
       quoteFound,
       ...(item.no !== cited.no ? { correctedFrom: cited.no } : {}),
-      usable: quoteFound && applicable && relation !== '판단 불충분',
+      usable: quoteFound && applicable && relation !== '판단 불충분' && !setAside(item.sourceNo),
     });
   }
   const sourcesFor = (relation: Relation) => unique(evidence.filter((u) => u.usable && u.relation === relation).map((u) => u.sourceNo));
@@ -179,7 +186,9 @@ export function applyRules(input: RuleInput): Judgment {
   const whyNone = (relation: Relation): { rule: string; note: string } => {
     if (bundle.evidence.length === 0) return { rule: '3번', note: '원문을 하나도 열지 못했다' };
     const claimed = evidence.filter((u) => u.relation === relation);
-    if (claimed.some((u) => u.quoteFound)) return { rule: '4번', note: `${relation} 근거의 대상·범위·시점이 모두 적용 가능하지 않다` };
+    if (claimed.some((u) => u.quoteFound && !setAside(u.sourceNo))) return { rule: '4번', note: `${relation} 근거의 대상·범위·시점이 모두 적용 가능하지 않다` };
+    const aside = claimed.find((u) => u.quoteFound && setAside(u.sourceNo));
+    if (aside) return { rule: '2번', note: `${relation} 근거가 판정에 쓰지 않는 자료(${setAside(aside.sourceNo)})뿐이다` };
     if (claimed.length > 0) return { rule: '1번', note: `${relation} 근거의 인용문이 발췌에 없다` };
     return { rule: '5번', note: `${relation} 근거가 없다` };
   };
@@ -234,8 +243,8 @@ export function applyRules(input: RuleInput): Judgment {
     }
 
     if (wanted === '해석 주의') {
-      // 같은 대상을 다루는 근거가 하나는 있어야 '해석 주의'라고 말할 수 있다
-      const anchored = evidence.some((u) => u.quoteFound && u.target === '적용 가능');
+      // 같은 대상을 다루는 근거가 하나는 있어야 '해석 주의'라고 말할 수 있다. 위키만 있으면 그렇게 말하지 않는다
+      const anchored = evidence.some((u) => u.quoteFound && u.target === '적용 가능' && !setAside(u.sourceNo));
       if (anchored) return { verdict: '해석 주의' };
       return bundle.evidence.length === 0
         ? { verdict: '근거 부족', rule: '3번', note: '원문을 하나도 열지 못했다' }
@@ -262,7 +271,7 @@ export function applyRules(input: RuleInput): Judgment {
   // 축소안은 일부를 확인했을 때 나머지를 빼는 것이다. 아래 둘 가운데 하나여야 확인한 부분이 있다고 본다.
   // - 판단에 쓸 수 있는 근거가 있다
   // - 같은 대상을 다룬 근거가 있고, 한정 표현이 출처와 맞지 않는다(그 한정 표현을 빼면 된다)
-  const sameTarget = evidence.some((u) => u.quoteFound && u.target === '적용 가능');
+  const sameTarget = evidence.some((u) => u.quoteFound && u.target === '적용 가능' && !setAside(u.sourceNo));
   const looseQualifier = qualifiers.some((q) => q.result !== '출처와 같다');
   const partlyConfirmed = evidence.some((u) => u.usable) || (sameTarget && looseQualifier);
 

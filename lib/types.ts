@@ -107,7 +107,7 @@ export interface SourceInfo {
   provisionalGrade: Grade;
   /** 기관 도메인 목록에서 찾은 기관 이름. 없으면 빈 문자열 */
   publisherHint: string;
-  /** 블로그, 위키, 커뮤니티 플랫폼인지. 그러면 문서 종류와 상관없이 3등급이다 */
+  /** 블로그, 커뮤니티 플랫폼인지. 그러면 문서 종류와 상관없이 3등급이다 */
   lowPlatform: boolean;
   fetch: FetchOutcome;
 }
@@ -168,6 +168,8 @@ export interface SourceRating {
   grade: Grade;
   /** 기관 목록에 없는 곳의 글을 1등급으로 봤다. 편집자가 발행 주체를 확인할 수 있게 표시한다 */
   publisherUnlisted: boolean;
+  /** 판정의 근거로 쓰지 않는 자료면 그 까닭(예: 위키). 근거로 쓰는 자료에는 두지 않는다 */
+  notUsed?: string;
 }
 
 /** 두 출처의 관계. 여기에 없는 쌍은 '미확인'이다 */
