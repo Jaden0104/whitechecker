@@ -32,10 +32,21 @@ import type {
 } from '../types.ts';
 
 export interface RuleInput {
-  claim: { statement: string; type: ClaimType; lead: boolean };
+  /** asOf는 명제의 기준 시점이다. 없으면 지금의 사실로 본다 */
+  claim: { statement: string; type: ClaimType; lead: boolean; asOf?: string };
   bundle: EvidenceBundle;
   model: ModelJudgment;
   sentenceKey: string;
+}
+
+/**
+ * 기준 시점이 지난 해인지. 기준 시점에 적힌 연도가 모두 근거를 모은 해보다 앞서면 지난 때로 본다.
+ * 연도가 없으면("현재", "이번 겨울") 지금으로 보고, 올해나 그 뒤의 연도가 하나라도 있으면(예: "2025년 12월~2026년 3월") 지금으로 본다
+ */
+export function isPastAsOf(asOf: string, gatheredAt: string): boolean {
+  const thisYear = Number(gatheredAt.slice(0, 4));
+  const years = [...asOf.matchAll(/(?<!\d)(1\d{3}|20\d{2})(?!\d)/g)].map((m) => Number(m[1]));
+  return Number.isFinite(thisYear) && years.length > 0 && years.every((year) => year < thisYear);
 }
 
 type ModelVerdict = '일치' | '불일치' | '근거 부족' | '해석 주의';
@@ -424,11 +435,14 @@ export function applyRules(input: RuleInput): Judgment {
     fix = NO_FIX;
   }
 
-  // 편집 우선순위(5.4절): 모델이 매기고, 제목과 첫 문단의 문장은 코드가 '상'으로 올린다
+  // 편집 우선순위(5.4절): 모델이 매기고, 제목과 첫 문단의 문장과 지금의 운영 정보는 코드가 '상'으로 올린다.
+  // 운영 정보(관람 시간, 요금, 휴관일, 행사 기간과 장소)는 독자가 그대로 따르는 안내라, 틀리면 독자가 헛걸음을 한다.
+  // 같은 종류의 문장이 모델의 답에 따라 '상'이 되기도 '중'이 되기도 해서 코드가 정한다.
+  // 기준 시점이 지난 해인 것(예: 개관한 해의 입장료)은 지난 일의 사실이므로 모델이 매긴 값을 둔다
   let priority: Priority | null = null;
   if (verdict !== '일치') {
     priority = pick(model.priority, ['상', '중', '하'] as Priority[], '중');
-    if (claim.lead) priority = '상';
+    if (claim.lead || (claim.type === '운영 정보' && !isPastAsOf(claim.asOf ?? '', bundle.gatheredAt))) priority = '상';
   }
 
   const used = new Set([...support, ...refute]);

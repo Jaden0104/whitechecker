@@ -48,7 +48,7 @@ export async function judgeClaim(input: JudgeInput, key: string, budget: Budget)
   });
 
   const judgment = applyRules({
-    claim: { statement: claim.statement, type: claim.type, lead: input.lead },
+    claim: { statement: claim.statement, type: claim.type, lead: input.lead, asOf: claim.asOf },
     bundle,
     model: value,
     sentenceKey: input.sentence ? contentId(input.sentence) : '',

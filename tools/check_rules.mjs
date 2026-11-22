@@ -2,7 +2,7 @@
 // 모델이 이렇게 답했다고 치고, 코드가 판정을 어떻게 확정하는지를 본다.
 // 사용: node tools/check_rules.mjs
 import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '../lib/flags.ts';
-import { CITE_INSTRUCTION, applyRules, sharesLongRun, squeezeQuote } from '../lib/judge/rules.ts';
+import { CITE_INSTRUCTION, applyRules, isPastAsOf, sharesLongRun, squeezeQuote } from '../lib/judge/rules.ts';
 import { publisherKey, samePublisherName } from '../lib/standard.ts';
 
 let failed = 0;
@@ -97,9 +97,9 @@ function model(verdict, evidence, over = {}) {
     ...over,
   };
 }
-function run(type, statement, m, { lead = false } = {}) {
+function run(type, statement, m, { lead = false, asOf } = {}) {
   const nos = [...new Set(m.evidence.map((e) => e.evidence_no))];
-  return applyRules({ claim: { statement, type, lead }, bundle: bundleOf(nos), model: m, sentenceKey: 'k' });
+  return applyRules({ claim: { statement, type, lead, ...(asOf === undefined ? {} : { asOf }) }, bundle: bundleOf(nos), model: m, sentenceKey: 'k' });
 }
 
 console.log('[인용문 견주기]');
@@ -325,6 +325,21 @@ j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로
 expect('제목·첫 문단의 문장은 우선순위를 상으로 올린다', j.priority, '상');
 j = run('운영 정보', '박물관은 09:30부터 17:30까지 문을 연다', model('일치', [ev(1, '지지', '09:30 ~ 17:30')], { priority: '상' }));
 expect('일치에는 우선순위를 매기지 않는다', j.priority, null);
+j = run('운영 정보', '박물관은 월요일에 쉰다', model('근거 부족', [], { priority: '중' }));
+expect("지금의 운영 정보는 모델이 '중'이라고 해도 상으로 올린다", j.priority, '상');
+j = run('운영 정보', '박물관은 월요일에 쉰다', model('근거 부족', [], { priority: '하' }), { asOf: '현재' });
+expect("기준 시점이 '현재'인 운영 정보도 상이다", j.priority, '상');
+j = run('운영 정보', '개관한 해의 입장료는 500원이었다', model('근거 부족', [], { priority: '중' }), { asOf: '1995년' });
+expect('기준 시점이 지난 해인 운영 정보는 모델이 매긴 값을 둔다', j.priority, '중');
+j = run('운영 정보', '특별전은 2026년 3월 1일까지 열린다', model('근거 부족', [], { priority: '중' }), { asOf: '2025년 12월~2026년 3월' });
+expect('기준 시점에 올해가 걸쳐 있으면 지금의 운영 정보로 본다', j.priority, '상');
+j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('근거 부족', [], { priority: '중' }));
+expect('다른 유형은 모델이 매긴 값을 그대로 둔다', j.priority, '중');
+expect(
+  '지난 해를 가리는 기준: 연도가 없으면 지금, 지난 연도만 있으면 지난 때, 올해나 그 뒤면 지금',
+  ['현재', '이번 겨울', '2019년 5월', '2026년 11월', '2027년 봄'].map((asOf) => isPastAsOf(asOf, '2026-11-20T03:00:00.000Z')).join(),
+  'false,false,true,false,false',
+);
 j = run('운영 정보', '박물관은 09:30부터 문을 연다', {
   ...model('일치', [ev(4, '지지', '오전 10시부터 오후 6시까지')]),
   sources: [{ source_no: 4, doc_type: '기관의 공식 안내', publisher: '어느 박물관', own_fact: true }],
