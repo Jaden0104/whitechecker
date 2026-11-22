@@ -22,6 +22,7 @@ import {
   viewOf,
 } from '../lib/run/model.ts';
 import { buildExtractChunks } from '../lib/chunks.ts';
+import { SINGLE_REFUTER_FLAG } from '../lib/flags.ts';
 import { extractUserMessage } from '../lib/prompts/extract.ts';
 import { splitManuscript } from '../lib/sentences.ts';
 import { createRechecker } from '../lib/run/recheck.ts';
@@ -579,6 +580,30 @@ console.log('\n[보강 검색]');
   const sent3 = api3.calls.gather.slice(before3);
   expect('재검증에서도 근거 부족이면 한 번 더 찾고 다시 판정한다', [recheck.state, viewOf(store3.get(), recheck.claims[0]).verdict, sent3.length, Boolean(sent3[1].more)], ['완료', '일치', 2, true]);
   expect('  재검증 묶음에도 보강 검색의 기록이 남는다', recheck.claims[0].bundle.followUp.added, 1);
+
+  // 불일치의 반박 근거가 2등급 한 곳뿐이면(표시가 붙는다) 한 번 더 찾아본다.
+  // 문장 2: 더 찾으니 원고와 같은 내용의 자료가 나와 해석 주의가 된다. 문장 3: 더 찾아도 그대로라 표시를 단 채 불일치로 남는다. 문장 4: 반박 근거가 넉넉해 찾지 않는다
+  const born = '스님은 1298년에 태어났다';
+  const opened = '박물관은 1996년에 문을 열었다';
+  const sized = '탑의 높이는 10m다';
+  const api4 = makeApi({
+    claimsFor: (s) => (s.includes('스님') ? [{ statement: born }] : s.includes('박물관') ? [{ statement: opened }] : s.includes('탑') ? [{ statement: sized }] : []),
+    verdictFor: (st, body) => (st === born && body.bundle.followUp ? '해석 주의' : '불일치'),
+    flagsFor: (st, body) => (st === sized || (st === born && body.bundle.followUp) ? [] : [SINGLE_REFUTER_FLAG]),
+    fixFor: (st) => (st === born ? NO_FIX : FIX),
+    moreFor: (st) => (st === born ? 2 : st === opened ? 1 : 0),
+  });
+  const store4 = makeStore();
+  const runner4 = createRunner(store4, api4);
+  runner4.start('# 제목\n\n스님은 1298년에 태어났습니다.\n\n박물관은 1996년에 문을 열었습니다.\n\n탑의 높이는 10m입니다.\n');
+  await runner4.idle();
+  const more4 = api4.calls.gather.filter((g) => g.more);
+  expect('반박 근거가 한 곳뿐인 불일치는 한 번 더 찾는다(넉넉한 불일치는 찾지 않는다)', more4.map((g) => g.statement).sort(), [born, opened].sort());
+  expect('  무엇이 모자란지를 함께 보낸다', more4[0].more.missing.includes('2등급 한 곳뿐'), true);
+  expect('더 찾아 원고와 같은 내용의 자료가 나오면 다시 판정한 결과를 쓴다', [view(store4, 's2-c1').verdict, view(store4, 's2-c1').judgment.flags], ['해석 주의', []]);
+  expect('더 찾아도 한 곳뿐이면 표시를 단 채 불일치로 남는다', [view(store4, 's3-c1').verdict, view(store4, 's3-c1').judgment.flags, view(store4, 's3-c1').bundle.followUp.added], ['불일치', [SINGLE_REFUTER_FLAG], 1]);
+  expect('  한 묶음에 한 번만 찾는다(다시 판정한 뒤에 또 찾지 않는다)', more4.filter((g) => g.statement === opened).length, 1);
+  expect('표시가 없는 불일치에는 보강 검색의 기록이 없다', view(store4, 's4-c1').bundle.followUp, undefined);
 }
 
 console.log(failed ? `\n실패 ${failed}건` : '\n모두 통과');

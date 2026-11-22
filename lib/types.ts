@@ -144,7 +144,7 @@ export interface EvidenceBundle {
   extraSearch: { done: boolean; reason: string };
   premium: PremiumData[];
   /**
-   * 판정이 '근거 부족'으로 나온 뒤 한 번 더 찾아본 기록(보강 검색). 찾아보지 않은 묶음에는 없다.
+   * 판정에서 근거가 모자라('근거 부족'이거나, '불일치'의 반박 근거가 한 곳뿐) 한 번 더 찾아본 기록(보강 검색). 찾아보지 않은 묶음에는 없다.
    * done은 검색을 실제로 했는지, added는 새로 실은 발췌의 수다. 한 묶음에 한 번만 한다.
    * linked는 앞서 연 기관 사이트의 링크를 따라 열어 본 안쪽 페이지의 수다(이 기능이 생기기 전의 묶음에는 없다)
    */

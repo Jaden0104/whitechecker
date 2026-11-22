@@ -5,7 +5,7 @@
 // - 같은 명제는 한 번만 처리한다. 내용이 같으면 근거를 함께 쓰고, 문장과 자리까지 같으면 판정도 함께 쓴다.
 // - 실패한 단계만 다시 한다. 이미 모은 근거가 있으면 다시 검색하지 않는다(F16).
 // - '직접 확인'으로 분류됐지만 유형이 내부 수치나 비공개 취재가 아니면 검색을 한 번 해 본 뒤 확정한다(F9).
-// - 판정이 '근거 부족'이면 모자랐던 근거를 겨냥해 한 번 더 찾고(보강 검색), 새 근거가 실렸으면 한 번만 다시 판정한다.
+// - 판정이 '근거 부족'이거나 '불일치'의 반박 근거가 한 곳뿐이면 모자란 근거를 겨냥해 한 번 더 찾고(보강 검색), 새 근거가 실렸으면 한 번만 다시 판정한다.
 // - 멈추거나 기록을 지운 뒤에 늦게 도착한 응답은 저장하지 않는다(F17).
 import { buildExtractChunks, followingText } from '../chunks.ts';
 import { LIMITS } from '../limits.ts';
@@ -392,7 +392,7 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
       addUsage(result.usage);
       let judgment = result.judgment;
 
-      // 보강 검색: 근거가 모자라 판정하지 못했으면 모자랐던 근거를 겨냥해 한 번 더 찾고, 새 근거가 실렸으면 한 번만 다시 판정한다.
+      // 보강 검색: 근거가 모자라면(판정하지 못했거나, 불일치의 반박 근거가 한 곳뿐) 모자란 근거를 겨냥해 한 번 더 찾고, 새 근거가 실렸으면 한 번만 다시 판정한다.
       // '직접 확인' 후보는 한 번 찾아본 것으로 확정하므로 하지 않는다(F9)
       if (!entry.direct?.probe && needsFollowUp(judgment, bundle)) {
         setEntry(id, { step: '근거 모으기' });

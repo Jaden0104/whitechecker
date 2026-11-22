@@ -119,7 +119,7 @@ export function createRechecker(store: RunStore, api: RunApi, options: { now?: (
             }
             let judgment = judged.judgment;
             let usage = judged.usage;
-            // 처음 검증과 같이, 근거가 모자라 판정하지 못했으면 한 번 더 찾아보고 새 근거가 실렸을 때만 다시 판정한다(보강 검색).
+            // 처음 검증과 같이, 근거가 모자라면(판정하지 못했거나, 불일치의 반박 근거가 한 곳뿐) 한 번 더 찾아보고 새 근거가 실렸을 때만 다시 판정한다(보강 검색).
             // 한 번 더 찾지 못했거나 다시 판정하지 못했으면 처음 판정을 그대로 쓴다
             if (needsFollowUp(judgment, gathered.bundle)) {
               setClaim(claim.id, { step: '근거 모으기' }, usage);

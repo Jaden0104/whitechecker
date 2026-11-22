@@ -1,6 +1,6 @@
 // 모델의 판정을 그대로 믿지 않고 코드가 다시 검사한다(PRD 5.3절의 규칙 1~7번).
 // 이 파일의 함수는 Liner를 부르지 않는다. 모델의 답과 근거 묶음만 받아 판정을 확정한다.
-import { TWO_PUBLISHERS_FLAG } from '../flags.ts';
+import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '../flags.ts';
 import { institutionNames } from '../gather/excerpts.ts';
 import type { ModelJudgment } from '../prompts/judge.ts';
 import {
@@ -321,6 +321,10 @@ export function applyRules(input: RuleInput): Judgment {
       if (relative && !groundedCorrection()) {
         return { verdict: '근거 부족', rule: '5번', note: '셈을 해야 하는 명제인데, 원고와 다른 값을 직접 적은 근거가 없다(바꿔 넣을 값이 반박 근거의 발췌에 그대로 있어야 한다)' };
       }
+      // 반박 근거가 2등급 자료 한 곳뿐이면 불일치로 두되 표시한다. 그 자료가 틀렸거나 자료마다 값이 다를 수 있기 때문이다.
+      // 같은 기관의 글 둘이나 옮겨 적은 글 둘도 한 곳으로 센다. 이 표시가 붙으면 화면 쪽 진행이 한 번 더 찾아본다(보강 검색)
+      const strong = refute.filter((no) => gradeOf(no) <= 2);
+      if (top(refute) === 2 && !strong.some((a) => strong.some((b) => apart(a, b)))) flags.push(SINGLE_REFUTER_FLAG);
       return { verdict: '불일치' };
     }
 

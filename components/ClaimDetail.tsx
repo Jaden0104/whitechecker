@@ -1,6 +1,6 @@
 // 항목의 상세(F8): 문장과 수정안, 판정의 까닭, 근거와 인용문, 출처와 등급, 검색 기록.
 import { Fragment } from 'react';
-import { TWO_PUBLISHERS_FLAG } from '@/lib/flags';
+import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '@/lib/flags';
 import type { ClaimView, RunState } from '@/lib/run/model';
 import type { ReviewAction } from '@/lib/run/review';
 import { PriorityBadge, StateBadge, VerdictBadge } from './bits';
@@ -161,6 +161,9 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
                   {judgment.flags.includes(TWO_PUBLISHERS_FLAG) && (
                     <small> (서로 다른 기관 두 곳이 같은 내용을 적어 일치로 봤습니다. 두 글이 같은 자료를 보고 쓴 것인지까지는 확인하지 못했습니다.)</small>
                   )}
+                  {judgment.flags.includes(SINGLE_REFUTER_FLAG) && (
+                    <small> (원고와 다르게 적은 자료가 한 곳뿐입니다. 자료마다 값이 다를 수 있으니, 수정안을 받아들이기 전에 그 출처를 직접 확인해 주세요.)</small>
+                  )}
                 </dd>
               </>
             )}
@@ -246,7 +249,7 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
               )}
               {bundle.followUp && (
                 <li>
-                  판정이 &lsquo;근거 부족&rsquo;이어서 한 번 더 찾음(보강 검색){bundle.followUp.done ? '' : ', 검색은 하지 않음'}: {bundle.followUp.reason}{' '}
+                  근거가 모자라 한 번 더 찾음(보강 검색){bundle.followUp.done ? '' : ', 검색은 하지 않음'}: {bundle.followUp.reason}{' '}
                   {bundle.followUp.added > 0 ? `새로 실은 발췌 ${bundle.followUp.added}개` : '새로 실은 자료 없음'}
                   {bundle.followUp.linked ? ` · 기관 사이트의 메뉴를 따라 열어 본 안쪽 페이지 ${bundle.followUp.linked}곳` : ''}
                 </li>

@@ -1,7 +1,7 @@
 // 판정의 코드 규칙(PRD 5.3절)이 기대대로 동작하는지 확인한다. Liner를 부르지 않는다.
 // 모델이 이렇게 답했다고 치고, 코드가 판정을 어떻게 확정하는지를 본다.
 // 사용: node tools/check_rules.mjs
-import { TWO_PUBLISHERS_FLAG } from '../lib/flags.ts';
+import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '../lib/flags.ts';
 import { CITE_INSTRUCTION, applyRules, sharesLongRun, squeezeQuote } from '../lib/judge/rules.ts';
 import { publisherKey, samePublisherName } from '../lib/standard.ts';
 
@@ -349,6 +349,20 @@ j = run(
   }),
 );
 expect('같은 대상의 근거가 있고 한정 표현이 출처와 맞지 않으면 축소안을 둔다', `${j.verdict}/${j.fix.kind}`, '해석 주의/축소안');
+
+console.log('\n[반박 근거가 한 곳뿐인 불일치]');
+const made = '각석은 1396년에 만들었다';
+const refuting = (nos, over = {}) => run('연대·인명·기관명', made, model('불일치', nos.map((no) => ev(no, '반박', Q[no])), over));
+j = refuting([2]);
+expect('2등급 자료 한 곳만 원고와 다르게 적었으면 불일치로 두되 표시를 붙인다', `${j.verdict}/${j.flags.join()}`, `불일치/${SINGLE_REFUTER_FLAG}`);
+j = refuting([2, 10]);
+expect('서로 다른 곳이 낸 2등급 둘이 반박하면 표시를 붙이지 않는다', `${j.verdict}/${j.flags.join()}`, '불일치/');
+j = refuting([2, 9]);
+expect('같은 기관의 글 둘은 한 곳으로 센다', `${j.verdict}/${j.flags.join()}`, `불일치/${SINGLE_REFUTER_FLAG}`);
+j = refuting([2, 13]);
+expect('옮겨 적은 글 둘도 한 곳으로 센다', `${j.verdict}/${j.flags.join()}`, `불일치/${SINGLE_REFUTER_FLAG}`);
+j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝')]));
+expect('1등급 자료가 반박하면 한 곳이어도 표시를 붙이지 않는다', `${j.verdict}/${j.flags.join()}`, '불일치/');
 
 console.log('\n[셈이 필요한 명제의 불일치]');
 // 출처 2는 책을 찍은 해와 "78년 앞선다"를 적었고, 출처 10은 두 가지로 읽히는 문장을 적었다(1378년이 입적한 해인지 찍은 해인지)
