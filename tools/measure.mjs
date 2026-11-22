@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { failureOf } from '../lib/client/api.ts';
+import { RECENT_FAILURE, SKIPPED_REASON, pageKey } from '../lib/gather/page-cache.ts';
 import { totalCost } from '../lib/pricing.ts';
 import { autoRevision, staysDirect, summarizeUsage, viewOf } from '../lib/run/model.ts';
 import { createRunner } from '../lib/run/runner.ts';
@@ -348,6 +349,48 @@ console.log('\n[호출과 비용]');
 console.log(`검색 ${summary.searches}회, 모델 호출 ${summary.modelCalls}회, 추정 비용 약 ${cost.dollars.toFixed(2)}달러, 실제로 돈 시간 ${Math.round(run.activeMs / 1000)}초`);
 for (const row of summary.byStage) console.log(`  ${row.stage}: 검색 ${row.searches}회, 모델 ${row.modelCalls}회${row.models.length ? `(${row.models.join(', ')})` : ''}, 토큰 입력 ${row.promptTokens} 출력 ${row.completionTokens}`);
 
+// ---------- 7. 원문 수집 ----------
+// 여러 명제가 같은 페이지를 찾으면 한 번만 열고 함께 쓴다(lib/gather/page-cache.ts). 같은 주소가 같은 '연 시각'으로 적혀 있으면 함께 쓴 것이다
+const pages = [];
+// 응답 없는 사이트라 건너뛴 것은 대개 고르는 단계에서 빠져 '열지 않음'으로 적힌다. 고른 뒤에 건너뛰게 된 것은 '실패'로 적힌다
+const skippedPages = [];
+// 조금 전에 다른 명제가 못 연 주소라 고르지 않은 것
+const recentSkips = [];
+for (const e of run.claims) {
+  if (!e.bundle || e.bundleFrom) continue;
+  for (const s of e.bundle.sources) {
+    if (s.fetch.reason === SKIPPED_REASON) skippedPages.push(s);
+    if (s.fetch.status === '열지 않음' && s.fetch.reason.startsWith(RECENT_FAILURE)) recentSkips.push(s);
+    if (s.fetch.status !== '열지 않음') pages.push(s);
+  }
+}
+// 조금 전에 실패한 주소를 다른 명제가 다시 고른 횟수. 고르는 단계에서 빼므로 0에 가까워야 한다
+const failedMarks = new Set();
+let pickedAgain = 0;
+for (const s of pages.filter((x) => x.fetch.status === '실패')) {
+  const mark = `${pageKey(s.url)} @ ${s.fetch.fetchedAt}`;
+  if (failedMarks.has(mark)) pickedAgain += 1;
+  else failedMarks.add(mark);
+}
+const opens = new Set(pages.filter((s) => s.fetch.reason !== SKIPPED_REASON).map((s) => `${pageKey(s.url)} @ ${s.fetch.fetchedAt}`));
+const failedPages = pages.filter((s) => s.fetch.status === '실패');
+const countBy = (list, keyOf) => {
+  const counts = new Map();
+  for (const item of list) counts.set(keyOf(item), (counts.get(keyOf(item)) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1]);
+};
+const failReasons = countBy(failedPages, (s) => s.fetch.reason || '사유 없음');
+const failHosts = countBy(failedPages, (s) => s.hostname);
+console.log('\n[원문 수집]');
+console.log(
+  `묶음에 적힌 페이지 ${pages.length}곳(서로 다른 주소 ${new Set(pages.map((s) => pageKey(s.url))).size}곳), 실제로 연 횟수 ${opens.size}, 응답 없는 사이트라 건너뛴 것 ${skippedPages.length}`,
+);
+console.log(
+  `성공 ${pages.filter((s) => s.fetch.status === '성공').length}, 관련 내용 없음 ${pages.filter((s) => s.fetch.status === '관련 내용 없음').length}, 실패 ${failedPages.length}${failReasons.length ? ` (${failReasons.map(([k, n]) => `${k} ${n}`).join(', ')})` : ''}`,
+);
+console.log(`  조금 전에 못 연 주소라 고르지 않은 것 ${recentSkips.length}, 그런 주소를 다시 고른 것 ${pickedAgain}`);
+if (failHosts.length) console.log(`  실패가 많은 사이트: ${failHosts.slice(0, 6).map(([k, n]) => `${k} ${n}`).join(', ')}`);
+
 writeFileSync(
   reportFile,
   JSON.stringify(
@@ -369,6 +412,7 @@ writeFileSync(
       '근거 모으기': { 견준_것: evidenceChecked.length, 있는_것: evidenceFound.length },
       수정안: { 기대와_맞음: fixOk, 어긋남: fixBad, 만들어진_것: toRead.length },
       호출: { 검색: summary.searches, 모델: summary.modelCalls, '추정 비용(달러)': Number(cost.dollars.toFixed(4)), '돈 시간(초)': Math.round(run.activeMs / 1000) },
+      '원문 수집': { 적힌_페이지: pages.length, 연_횟수: opens.size, 건너뛴_것: skippedPages.length, 실패: Object.fromEntries(failReasons) },
       정답별: rows.map((r) => ({ id: r.a.id, 구분: kindOf(r.a), 종류: r.a.종류 ?? null, 판정: r.verdict, 결과: r.status, 명제: r.views.map((v) => v.entry.claim.id) })),
     },
     null,

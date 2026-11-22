@@ -84,12 +84,13 @@ export interface SearchRecord {
 /** 원문 수집의 결과 */
 export interface FetchOutcome {
   status: '성공' | '실패' | '관련 내용 없음' | '열지 않음';
-  /** 실패나 제약의 사유. 예: 접근 제한, 시간 초과, 본문 없음 */
+  /** 실패나 제약의 사유. 예: 접근 제한, 시간 초과, 본문 없음, 응답 없어 건너뜀(그 사이트가 앞서 연달아 응답하지 않았다) */
   reason: string;
   /** 뽑은 본문의 글자 수 */
   chars: number;
   /** 크기 한도에 걸려 앞부분만 읽었다 */
   truncated: boolean;
+  /** 그 페이지를 실제로 연 시각. 다른 명제가 방금 연 페이지를 함께 쓰면 그때의 시각이다(lib/gather/page-cache.ts) */
   fetchedAt: string | null;
 }
 

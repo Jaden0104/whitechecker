@@ -27,7 +27,9 @@ export interface Candidate {
 export const UNREADABLE = /\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip|jpe?g|png|gif|mp4|mp3)$/i;
 
 function keyOf(url: URL): string {
-  return `${url.hostname.toLowerCase().replace(/^www\./, '')}${url.pathname.replace(/\/$/, '')}${url.search}`;
+  // 주소에 붙은 세션 표시(;jsessionid=…)만 다른 결과는 같은 페이지다
+  const path = url.pathname.replace(/;jsessionid=[^/;]*/gi, '').replace(/\/$/, '');
+  return `${url.hostname.toLowerCase().replace(/^www\./, '')}${path}${url.search}`;
 }
 
 /** 여러 검색의 결과를 주소 기준으로 합친다 */

@@ -62,7 +62,20 @@ export interface PageLink {
  * 안쪽 페이지를 찾을 때는 메뉴가 길잡이이기 때문이다. 스크립트로만 움직이는 링크(href="#", javascript:)는 뽑지 않는다
  */
 export function extractLinks(html: string, baseUrl: string): PageLink[] {
+  return linksOf(parse(html) as unknown as HtmlNode, baseUrl);
+}
+
+export function extractPageText(html: string): PageText {
+  return pageTextOf(parse(html) as unknown as HtmlNode);
+}
+
+/** HTML을 한 번만 풀어 본문 글과 링크를 함께 뽑는다. 연 페이지를 여러 명제가 함께 쓸 때(page-cache.ts) 쓴다 */
+export function readHtml(html: string, baseUrl: string): { page: PageText; links: PageLink[] } {
   const doc = parse(html) as unknown as HtmlNode;
+  return { page: pageTextOf(doc), links: linksOf(doc, baseUrl) };
+}
+
+function linksOf(doc: HtmlNode, baseUrl: string): PageLink[] {
   const out: PageLink[] = [];
   const seen = new Set<string>();
   const walk = (node: HtmlNode) => {
@@ -91,8 +104,7 @@ export function extractLinks(html: string, baseUrl: string): PageLink[] {
   return out;
 }
 
-export function extractPageText(html: string): PageText {
-  const doc = parse(html) as unknown as HtmlNode;
+function pageTextOf(doc: HtmlNode): PageText {
   const lines: string[] = [];
   const seen = new Set<string>();
   let current = '';

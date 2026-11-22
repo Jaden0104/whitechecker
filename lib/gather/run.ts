@@ -3,7 +3,6 @@
 import { claimKey } from '../evidence.ts';
 import { LIMITS } from '../limits.ts';
 import { LinerError, chatJson, searchWeb, type Budget, type SearchHit, type SearchOptions } from '../liner.ts';
-import { decodeBody, safeGet } from '../net/safe-get.ts';
 import { FOLLOW_UP_SYSTEM, MORE_SEARCH_SCHEMA, MORE_SEARCH_SYSTEM, followUpUserMessage, moreSearchUserMessage } from '../prompts/more-search.ts';
 import { STANDARD, excludedReason, hostMatches, institutionOf, requirementMetBeforeJudging, siteOf } from '../standard.ts';
 import type {
@@ -18,7 +17,7 @@ import type {
   Usage,
 } from '../types.ts';
 import { claimKeywords, pickExcerpts, textRelevance, type Keyword } from './excerpts.ts';
-import { extractLinks, extractPageText } from './page-text.ts';
+import { isPassingSkip, readPage, unopenableReason } from './page-cache.ts';
 import { UNREADABLE, mergeResults, orderCandidates, pickPages, type Candidate } from './rank.ts';
 
 export type GatherClaim = Pick<Claim, 'statement' | 'type' | 'qualifiers' | 'asOf' | 'queries' | 'counterQuery'>;
@@ -91,8 +90,33 @@ function holderClues(pages: OpenedPage[]): string[] {
   return [...out];
 }
 
+/**
+ * 지금 열어 봐야 소용없는 후보에 그 까닭을 적어, 고를 때 빠지게 한다(page-cache.ts의 unopenableReason).
+ * 연달아 응답하지 않아 건너뛰는 중인 사이트의 페이지, 조금 전에 다른 명제가 열어 보았다가 못 연 주소, 열어 보니 본문이 없던 주소다.
+ * 그런 후보는 골라 봐야 바로 실패로 돌아오고, 명제마다 정해 둔 여는 횟수만 줄어든다. 적어 둔 까닭은 묶음의 '열지 않음'에 그대로 남는다
+ */
+function markUnopenable(candidates: Candidate[]): void {
+  for (const c of candidates) {
+    if (c.skip) continue;
+    const why = unopenableReason(c.url, MIN_PAGE_CHARS);
+    if (why) c.skip = why;
+  }
+}
+
+/** 열 페이지를 고른다(rank.ts의 pickPages). 그 전에 지금 열어 봐야 소용없는 후보를 뺀다 */
+function pickOpenable(candidates: Candidate[], count: number, opened: Set<string>, wantCounter: boolean): Candidate[] {
+  markUnopenable(candidates);
+  return pickPages(candidates, count, opened, wantCounter);
+}
+
+/**
+ * 후보 하나를 열어 이 명제와 관련 있는 페이지인지 본다.
+ * 여는 일은 여러 명제가 함께 쓴다(page-cache.ts). 같은 페이지를 다른 명제가 방금 열었으면 그 결과를 받고,
+ * 기록하는 시각(fetchedAt)은 그 페이지를 실제로 연 시각이다
+ */
 async function openPage(candidate: Candidate, timeoutMs: number, keywords: Keyword[]): Promise<OpenedPage> {
-  const fetchedAt = new Date().toISOString();
+  const got = await readPage(candidate.url, timeoutMs);
+  const fetchedAt = got.fetchedAt;
   const failed = (reason: string, chars = 0): OpenedPage => ({
     candidate,
     outcome: { status: '실패', reason, chars, truncated: false, fetchedAt },
@@ -100,9 +124,8 @@ async function openPage(candidate: Candidate, timeoutMs: number, keywords: Keywo
     pageDate: null,
     direct: false,
   });
-  const got = await safeGet(candidate.url, { timeoutMs, maxBytes: LIMITS.gather.pageBytes });
   if (!got.ok) return failed(got.reason);
-  const page = extractPageText(decodeBody(got.body, got.contentType).text);
+  const page = got.page;
   // 성공의 기준은 본문 글을 실제로 뽑았는지다
   if (page.chars < MIN_PAGE_CHARS) return failed('본문 없음', page.chars);
   const probe = pickExcerpts(page.blocks, keywords, 2000);
@@ -186,10 +209,10 @@ export async function gatherEvidence(
     for (const c of list) openedUrls.add(c.url);
     opened.push(...(await Promise.all(list.map((c) => openPage(c, timeoutMs, keywords)))));
   };
-  await open(pickPages(candidates, FIRST_ROUND, openedUrls, Boolean(claim.counterQuery.trim())), EXTRA_RESERVE_MS);
+  await open(pickOpenable(candidates, FIRST_ROUND, openedUrls, Boolean(claim.counterQuery.trim())), EXTRA_RESERVE_MS);
   // 열지 못한 곳이 있으면 다음 후보로 한 번 메운다
   const missed = FIRST_ROUND - good().length;
-  if (missed > 0) await open(pickPages(candidates, missed, openedUrls, false), EXTRA_RESERVE_MS);
+  if (missed > 0) await open(pickOpenable(candidates, missed, openedUrls, false), EXTRA_RESERVE_MS);
 
   // 3. 요구하는 등급의 출처가 이 명제가 묻는 속성까지 다루는지 본다. 모자라면 추가 검색을 한 번 한다.
   //    1등급 하나로도 채울 수 있는 유형은 2등급 둘로는 채운 것으로 치지 않는다(독립인지는 판정에서야 알 수 있다)
@@ -274,10 +297,10 @@ export async function gatherEvidence(
 
   // 4. 남은 자리에 더 연다. 추가 검색의 결과를 먼저 보고, 그래도 모자라면 잠정 2등급 이상의 다음 후보를 연다
   if (!satisfied()) {
-    await open(pickPages(extraCandidates, LIMITS.gather.pages - good().length, openedUrls, false), 1500);
+    await open(pickOpenable(extraCandidates, LIMITS.gather.pages - good().length, openedUrls, false), 1500);
     if (!satisfied()) {
       const better = candidates.filter((c) => c.provisionalGrade <= 2);
-      await open(pickPages(better, 1, openedUrls, false), 1500);
+      await open(pickOpenable(better, 1, openedUrls, false), 1500);
     }
   }
 
@@ -376,10 +399,11 @@ async function innerPages(
   const aimed = new Map<string, number>();
   await Promise.all(
     from.map(async (source) => {
-      const got = await safeGet(source.url, { timeoutMs, maxBytes: LIMITS.gather.pageBytes });
+      // 앞서 연 페이지라 대개는 두었던 결과를 받는다(다시 열지 않는다)
+      const got = await readPage(source.url, timeoutMs);
       if (!got.ok) return;
       const home = siteOf(new URL(got.url).hostname);
-      extractLinks(decodeBody(got.body, got.contentType).text, got.url).forEach((link, order) => {
+      got.links.forEach((link, order) => {
         const url = new URL(link.url);
         if (siteOf(url.hostname) !== home || UNREADABLE.test(url.pathname) || knownUrls.has(url.href) || url.href === got.url) return;
         if (link.text.length < 2 || link.text.length > 40) return;
@@ -444,7 +468,8 @@ export async function gatherMore(
     provisionalGrade: s.provisionalGrade,
     publisherHint: s.publisherHint,
     lowPlatform: s.lowPlatform,
-    skip: s.fetch.status === '열지 않음' ? s.fetch.reason : '',
+    // 응답 없는 사이트이거나 조금 전에 못 열어서 열지 않았던 것은 지금의 상태로 다시 가린다(markUnopenable)
+    skip: s.fetch.status === '열지 않음' && !isPassingSkip(s.fetch.reason) ? s.fetch.reason : '',
     relevance: relevanceOf(`${s.title} ${s.summary}`),
   }));
   const openedUrls = new Set(previous.sources.filter((s) => s.fetch.status !== '열지 않음').map((s) => s.url));
@@ -554,7 +579,10 @@ export async function gatherMore(
     const left = () => LIMITS.followUp.pages - good().length;
     // 안쪽 페이지를 먼저 연다. 앞서 연 기관 사이트의 메뉴에서, 찾는 내용을 가리키는 이름이 붙은 링크를 따라간다.
     // 실패해도(사이트가 응답하지 않는 경우 등) 검색으로 찾은 페이지는 그대로 연다
-    const linked = await innerPages(previous, targetSite, keywords, aimWords, new Set(candidates.map((c) => c.url)), budget).catch(() => []);
+    const found = await innerPages(previous, targetSite, keywords, aimWords, new Set(candidates.map((c) => c.url)), budget).catch(() => []);
+    // 조금 전에 못 열었던 링크는 빼고 다음 링크를 본다
+    markUnopenable(found);
+    const linked = found.filter((c) => !c.skip);
     const before = opened.length;
     const goodLinks = () => opened.slice(before).filter((p) => p.outcome.status === '성공').length;
     await open(linked.slice(0, LIMITS.followUp.linkPages));
@@ -562,10 +590,10 @@ export async function gatherMore(
     const missing = LIMITS.followUp.linkPages - goodLinks();
     if (missing > 0) await open(linked.slice(LIMITS.followUp.linkPages, LIMITS.followUp.linkPages + missing));
     followUp.linked = opened.length - before;
-    if (left() > 0) await open(pickPages(fresh, left(), openedUrls, false));
+    if (left() > 0) await open(pickOpenable(fresh, left(), openedUrls, false));
     // 열지 못했거나 찾는 내용이 없던 자리는 다음 후보로 한 번 메운다
-    if (left() > 0) await open(pickPages(fresh, left(), openedUrls, false));
-    if (left() > 0) await open(pickPages(known.filter((c) => c.provisionalGrade <= 2), left(), openedUrls, false));
+    if (left() > 0) await open(pickOpenable(fresh, left(), openedUrls, false));
+    if (left() > 0) await open(pickOpenable(known.filter((c) => c.provisionalGrade <= 2), left(), openedUrls, false));
   }
 
   // 앞서 모은 출처와 발췌는 번호까지 그대로 두고, 새로 얻은 것을 뒤에 붙인다
