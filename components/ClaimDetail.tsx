@@ -1,5 +1,6 @@
 // 항목의 상세(F8): 문장과 수정안, 판정의 까닭, 근거와 인용문, 출처와 등급, 검색 기록.
 import { Fragment } from 'react';
+import { TWO_PUBLISHERS_FLAG } from '@/lib/flags';
 import type { ClaimView, RunState } from '@/lib/run/model';
 import type { ReviewAction } from '@/lib/run/review';
 import { PriorityBadge, StateBadge, VerdictBadge } from './bits';
@@ -155,7 +156,12 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
             {(judgment.flags.length > 0 || judgment.needChoice) && (
               <>
                 <dt>표시</dt>
-                <dd>{[judgment.needChoice ? '선택 필요' : '', ...judgment.flags].filter(Boolean).join(' · ')}</dd>
+                <dd>
+                  {[judgment.needChoice ? '선택 필요' : '', ...judgment.flags].filter(Boolean).join(' · ')}
+                  {judgment.flags.includes(TWO_PUBLISHERS_FLAG) && (
+                    <small> (서로 다른 기관 두 곳이 같은 내용을 적어 일치로 봤습니다. 두 글이 같은 자료를 보고 쓴 것인지까지는 확인하지 못했습니다.)</small>
+                  )}
+                </dd>
               </>
             )}
             {view.direct?.reclassified && (
@@ -236,6 +242,12 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
               {bundle.extraSearch.reason && (
                 <li>
                   추가 검색 {bundle.extraSearch.done ? '함' : '하지 않음'}: {bundle.extraSearch.reason}
+                </li>
+              )}
+              {bundle.followUp && (
+                <li>
+                  판정이 &lsquo;근거 부족&rsquo;이어서 한 번 더 찾음(보강 검색){bundle.followUp.done ? '' : ', 검색은 하지 않음'}: {bundle.followUp.reason}{' '}
+                  {bundle.followUp.added > 0 ? `새로 실은 발췌 ${bundle.followUp.added}개` : '새로 실은 자료 없음'}
                 </li>
               )}
               {opened.map((s) => (

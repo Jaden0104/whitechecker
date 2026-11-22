@@ -192,6 +192,8 @@ function factLines(view: ClaimView, index: number, outcome: string): string[] {
   const judgment = view.judgment;
   if (!judgment) return lines;
   lines.push(`     - 까닭: ${judgment.reason}`);
+  // 일치로 본 길이 평소와 다를 때의 표시(서로 다른 기관 두 곳, 단일 근거 등)도 기록에 남긴다
+  if (judgment.flags.length > 0) lines.push(`     - 표시: ${judgment.flags.join(', ')}`);
   if (judgment.lowered) lines.push(`     - 판정을 바꾼 규칙: ${judgment.lowered.rule}(${judgment.lowered.note})`);
   if (judgment.fix.kind !== '없음') lines.push(`     - 고칠 내용(${judgment.fix.kind}): ${judgment.fix.instruction}`);
   if (judgment.action) lines.push(`     - 권고: ${judgment.action}`);
@@ -278,6 +280,7 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
     판정: view.verdict,
     '편집 우선순위': view.judgment?.priority ?? null,
     까닭: view.judgment?.reason ?? (staysDirect(view) ? view.entry.claim.privateReason : ''),
+    표시: view.judgment?.flags ?? [],
     권고: view.judgment?.action ?? '',
     '고칠 내용': view.judgment && view.judgment.fix.kind !== '없음' ? { 종류: view.judgment.fix.kind, 내용: view.judgment.fix.instruction } : null,
     '판정을 바꾼 규칙': view.judgment?.lowered ?? null,

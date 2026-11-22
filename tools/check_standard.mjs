@@ -66,7 +66,8 @@ const onlyWikis = mergeResults([{ kind: '기본', hits: batch.hits.slice(0, 2) }
 expect('검색 결과가 위키뿐이면 아무것도 열지 않는다', pickPages(onlyWikis, 3, new Set(), false).length, 0);
 
 console.log('\n[판정에 보내는 글]');
-expect('문서 종류의 설명에 위키를 쓰지 않는다고 적는다', JUDGE_SYSTEM.includes('위키: 누구나 고칠 수 있는 위키 문서. 판정의 근거로 쓰지 않는다'), true);
+expect('문서 종류의 설명에 위키를 쓰지 않는다고 적는다', JUDGE_SYSTEM.includes('위키(근거로 쓰지 않음): 누구나 고칠 수 있는 위키 문서. 판정의 근거로 쓰지 않는다'), true);
+expect('문서 종류마다 등급을 함께 적는다', JUDGE_SYSTEM.includes('백과사전(2등급):') && JUDGE_SYSTEM.includes('기관의 공식 안내(1등급, own_fact가 false면 2등급):'), true);
 expect('판정 지침에도 적는다', JUDGE_SYSTEM.includes('위키 문서는 판정의 근거로 쓰지 않는다'), true);
 const source = (no, hostname, lowPlatform) => ({
   no,

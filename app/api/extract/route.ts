@@ -58,6 +58,10 @@ export async function POST(request: Request) {
       schema: EXTRACT_SCHEMA,
       maxTokens: LIMITS.extract.outputTokens,
       budget: newBudget(),
+      // 품질 우선으로 고정한다(2026-11-22). 고르는 방식을 정하지 않거나 '균형'으로 두면 요청마다 sonnet과 opus가 섞여 답했고,
+      // sonnet이 답한 묶음에서는 한 문장에 든 두 사실(연도와 금액)을 명제 하나로 묶어 뽑는 일이 있었다.
+      // 품질 우선에서는 개발용 원고를 세 번 돌린 아홉 묶음 모두 opus가 답했고, 두 사실이 든 문장을 24번 모두 나눠 뽑았다
+      routingStrategy: 'quality',
     });
 
     const known = new Set(input.sentences.map((s) => s.id));

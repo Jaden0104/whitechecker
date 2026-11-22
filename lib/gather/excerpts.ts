@@ -32,8 +32,21 @@ const STOP = new Set([
   '있다', '있습니다', '있는', '입니다', '합니다', '됩니다', '했습니다', '됐습니다', '이다', '것이다', '것으로',
   '그리고', '그러나', '하지만', '또한', '대한', '위한', '통해', '관련', '따르면', '지금', '현재',
 ]);
-const INSTITUTION_END =
+export const INSTITUTION_END =
   /(박물관|미술관|도서관|기념관|전시관|과학관|연구원|연구소|위원회|재단|공사|공단|은행|협회|학회|대학교|유산청|문화재청|통계청|시청|군청|구청|도청|관광부|진흥원|정보원|포털)$/;
+
+/**
+ * 글에 나오는 기관 이름. 조사가 붙은 낱말은 뒤를 한두 글자 덜어 내고 기관 이름의 꼴(…박물관, …도서관, …연구원 등)인지 본다.
+ * 예: "한국학중앙연구원과 국립중앙박물관에 전합니다" → 한국학중앙연구원, 국립중앙박물관
+ */
+export function institutionNames(text: string): string[] {
+  const out = new Set<string>();
+  for (const token of text.match(/[가-힣]{3,}/g) ?? []) {
+    const name = [token, token.slice(0, -1), token.slice(0, -2)].find((form) => form.length >= 3 && INSTITUTION_END.test(form));
+    if (name) out.add(name);
+  }
+  return [...out];
+}
 const INSTITUTION_WORDS = new Set(
   STANDARD.domains.institutions.flatMap((i) => i.publisher.match(/[가-힣]{3,}/g) ?? []),
 );

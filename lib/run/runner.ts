@@ -5,6 +5,7 @@
 // - 같은 명제는 한 번만 처리한다. 내용이 같으면 근거를 함께 쓰고, 문장과 자리까지 같으면 판정도 함께 쓴다.
 // - 실패한 단계만 다시 한다. 이미 모은 근거가 있으면 다시 검색하지 않는다(F16).
 // - '직접 확인'으로 분류됐지만 유형이 내부 수치나 비공개 취재가 아니면 검색을 한 번 해 본 뒤 확정한다(F9).
+// - 판정이 '근거 부족'이면 모자랐던 근거를 겨냥해 한 번 더 찾고(보강 검색), 새 근거가 실렸으면 한 번만 다시 판정한다.
 // - 멈추거나 기록을 지운 뒤에 늦게 도착한 응답은 저장하지 않는다(F17).
 import { buildExtractChunks, followingText } from '../chunks.ts';
 import { LIMITS } from '../limits.ts';
@@ -12,6 +13,7 @@ import { planMerge, unresolvedAfter } from '../merge/plan.ts';
 import type { ExtractInput } from '../prompts/extract.ts';
 import { contentId, splitManuscript } from '../sentences.ts';
 import type { Claim, ClaimCore, EvidenceBundle, Judgment, MergeFix, SentenceRevision, Usage } from '../types.ts';
+import { gainedEvidence, missingNote, needsFollowUp } from './followup.ts';
 import {
   PRIVATE_BY_NATURE,
   bundleLeader,
@@ -49,6 +51,11 @@ export interface GatherRequest {
   queries: string[];
   counterQuery: string;
   isPublic: true;
+  /**
+   * 보강 검색일 때만 둔다. 앞서 모은 근거 묶음과 서명, 판정에서 모자랐던 것을 함께 보내면
+   * 서버가 한 번 더 찾아 새 근거를 그 묶음 뒤에 붙여 돌려준다
+   */
+  more?: { bundle: EvidenceBundle; signature: string; missing: string };
 }
 
 export interface JudgeRequest {
@@ -253,23 +260,24 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
     // ---------- 2. 근거 모으기와 판정 ----------
     const gathering = new Map<string, Promise<ApiFailure | null>>();
 
-    async function gatherFor(holderId: string): Promise<ApiFailure | null> {
-      const claim = (entryOf(snapshot(), holderId) as ClaimEntry).claim;
+    function gatherRequestOf(claim: Claim): GatherRequest {
       // '직접 확인' 후보에는 추출이 검색어를 달지 않는다. 명제를 그대로 검색어로 써서 한 번 찾아본다
       const own = claim.isPublic ? claim.queries.filter(Boolean) : [];
       const queries = own.length > 0 ? own : [claim.statement.slice(0, 120)];
-      const result = await api.gather(
-        {
-          statement: claim.statement,
-          type: claim.type,
-          qualifiers: claim.qualifiers,
-          asOf: claim.asOf,
-          queries,
-          counterQuery: claim.isPublic ? claim.counterQuery : '',
-          isPublic: true,
-        },
-        signal,
-      );
+      return {
+        statement: claim.statement,
+        type: claim.type,
+        qualifiers: claim.qualifiers,
+        asOf: claim.asOf,
+        queries,
+        counterQuery: claim.isPublic ? claim.counterQuery : '',
+        isPublic: true,
+      };
+    }
+
+    async function gatherFor(holderId: string): Promise<ApiFailure | null> {
+      const claim = (entryOf(snapshot(), holderId) as ClaimEntry).claim;
+      const result = await api.gather(gatherRequestOf(claim), signal);
       if (!alive()) return ABORTED;
       if (!result.ok) {
         if (result.fatal) block(result.reason);
@@ -290,6 +298,43 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
       if (!job) {
         job = gatherFor(holderId);
         gathering.set(holderId, job);
+      }
+      return job;
+    }
+
+    // 보강 검색도 근거 묶음 하나에 한 번만 한다. 같은 근거를 함께 쓰는 항목들은 같은 요청의 결과를 받는다
+    type Fuller = { bundle: EvidenceBundle; signature: string };
+    const following = new Map<string, Promise<Fuller | null>>();
+
+    async function followUpFor(holderId: string, judgment: Judgment): Promise<Fuller | null> {
+      const holder = entryOf(snapshot(), holderId) as ClaimEntry;
+      if (!holder.bundle) return null;
+      const result = await api.gather(
+        { ...gatherRequestOf(holder.claim), more: { bundle: holder.bundle, signature: holder.signature, missing: missingNote(judgment) } },
+        signal,
+      );
+      if (!alive()) return null;
+      if (!result.ok) {
+        // 한 번 더 찾는 것은 덤이다. 실패해도 처음 판정을 그대로 쓴다. 키나 접속 코드 문제일 때만 실행을 멈춘다
+        if (result.fatal) block(result.reason);
+        return null;
+      }
+      update((run) => ({
+        ...run,
+        usage: [...run.usage, ...result.usage],
+        claims: run.claims.map((e) => (e.claim.id === holderId ? { ...e, bundle: result.bundle, signature: result.signature } : e)),
+      }));
+      return { bundle: result.bundle, signature: result.signature };
+    }
+
+    /** 보강 검색을 마친 묶음을 돌려준다. 이미 했으면 그 묶음을, 하고 있으면 그 요청의 결과를 기다려 돌려준다 */
+    function ensureFollowUp(holderId: string, judgment: Judgment): Promise<Fuller | null> {
+      const holder = entryOf(snapshot(), holderId);
+      if (holder?.bundle?.followUp) return Promise.resolve({ bundle: holder.bundle, signature: holder.signature });
+      let job = following.get(holderId);
+      if (!job) {
+        job = followUpFor(holderId, judgment);
+        following.set(holderId, job);
       }
       return job;
     }
@@ -324,16 +369,18 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
 
       setEntry(id, { step: '판정' });
       const sentence = run.sentences.find((s) => s.id === entry.claim.sentenceId);
-      const result = await api.judge(
-        {
-          claim: { statement: entry.claim.statement, type: entry.claim.type, qualifiers: entry.claim.qualifiers, asOf: entry.claim.asOf },
-          sentence: sentence?.plain ?? '',
-          lead: isLead(run.sentences, entry.claim.sentenceId),
-          bundle,
-          signature: holder.signature,
-        },
-        signal,
-      );
+      const judgeWith = (given: EvidenceBundle, signature: string) =>
+        api.judge(
+          {
+            claim: { statement: entry.claim.statement, type: entry.claim.type, qualifiers: entry.claim.qualifiers, asOf: entry.claim.asOf },
+            sentence: sentence?.plain ?? '',
+            lead: isLead(run.sentences, entry.claim.sentenceId),
+            bundle: given,
+            signature,
+          },
+          signal,
+        );
+      const result = await judgeWith(bundle, holder.signature);
       if (!alive()) return;
       if (!result.ok) {
         if (result.fatal) return block(result.reason);
@@ -343,15 +390,37 @@ export function createRunner(store: RunStore, api: RunApi, options: RunnerOption
         return;
       }
       addUsage(result.usage);
+      let judgment = result.judgment;
+
+      // 보강 검색: 근거가 모자라 판정하지 못했으면 모자랐던 근거를 겨냥해 한 번 더 찾고, 새 근거가 실렸으면 한 번만 다시 판정한다.
+      // '직접 확인' 후보는 한 번 찾아본 것으로 확정하므로 하지 않는다(F9)
+      if (!entry.direct?.probe && needsFollowUp(judgment, bundle)) {
+        setEntry(id, { step: '근거 모으기' });
+        const fuller = await ensureFollowUp(holderId, judgment);
+        if (!alive()) return;
+        if (fuller && gainedEvidence(bundle, fuller.bundle)) {
+          setEntry(id, { step: '판정' });
+          const again = await judgeWith(fuller.bundle, fuller.signature);
+          if (!alive()) return;
+          if (again.ok) {
+            addUsage(again.usage);
+            judgment = again.judgment;
+          } else if (again.fatal) {
+            return block(again.reason);
+          }
+          // 다시 판정하지 못했으면 처음 판정을 그대로 둔다
+        }
+      }
+
       if (entry.direct?.probe) {
         // 검색해 보니 판정할 자료가 있었으면 그 판정을 쓰고, 없었으면 '직접 확인'으로 확정한다
-        const decided = result.judgment.verdict !== '근거 부족';
+        const decided = judgment.verdict !== '근거 부족';
         const note = decided
           ? '처음에는 공개 자료로 확인할 수 없는 주장으로 봤지만, 검색해 보니 자료가 있어 판정했습니다.'
           : '검색을 한 번 해 보았지만 판정할 만한 공개 자료가 없었습니다.';
-        setEntry(id, { state: '완료', step: '', judgment: result.judgment, direct: { probe: true, reclassified: decided, note } });
+        setEntry(id, { state: '완료', step: '', judgment, direct: { probe: true, reclassified: decided, note } });
       } else {
-        setEntry(id, { state: '완료', step: '', judgment: result.judgment });
+        setEntry(id, { state: '완료', step: '', judgment });
       }
       await afterClaim(id);
     }

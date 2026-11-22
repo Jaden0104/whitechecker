@@ -65,8 +65,11 @@ export interface Claim {
 /** 출처 등급. 1이 가장 높다 */
 export type Grade = 1 | 2 | 3;
 
-/** 검색의 종류. 기본 검색 2회, 반증 검색 1회, 추가 검색 1회까지 */
-export type SearchKind = '기본' | '반증' | '추가';
+/**
+ * 검색의 종류. 기본 검색 2회, 반증 검색 1회, 추가 검색 1회까지.
+ * '보강'은 판정이 '근거 부족'으로 나온 뒤, 모자랐던 근거를 겨냥해 한 번 더 하는 검색이다
+ */
+export type SearchKind = '기본' | '반증' | '추가' | '보강';
 
 export interface SearchRecord {
   query: string;
@@ -140,6 +143,11 @@ export interface EvidenceBundle {
   /** 추가 검색을 했는지와 그 까닭 */
   extraSearch: { done: boolean; reason: string };
   premium: PremiumData[];
+  /**
+   * 판정이 '근거 부족'으로 나온 뒤 한 번 더 찾아본 기록(보강 검색). 찾아보지 않은 묶음에는 없다.
+   * done은 검색을 실제로 했는지, added는 새로 실은 발췌의 수다. 한 묶음에 한 번만 한다
+   */
+  followUp?: { done: boolean; reason: string; added: number };
 }
 
 /** 근거 묶음의 식별값을 만드는 데 들어가는 명제의 항목 */

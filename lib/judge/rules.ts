@@ -1,7 +1,18 @@
 // 모델의 판정을 그대로 믿지 않고 코드가 다시 검사한다(PRD 5.3절의 규칙 1~7번).
 // 이 파일의 함수는 Liner를 부르지 않는다. 모델의 답과 근거 묶음만 받아 판정을 확정한다.
+import { TWO_PUBLISHERS_FLAG } from '../flags.ts';
+import { institutionNames } from '../gather/excerpts.ts';
 import type { ModelJudgment } from '../prompts/judge.ts';
-import { FALLBACK_DOC_TYPE, STANDARD, excludedReason, finalGrade, isDocType, notEvidenceDocType, type RequirementOption } from '../standard.ts';
+import {
+  FALLBACK_DOC_TYPE,
+  STANDARD,
+  excludedReason,
+  finalGrade,
+  isDocType,
+  notEvidenceDocType,
+  samePublisherName,
+  type RequirementOption,
+} from '../standard.ts';
 import type {
   Applicability,
   ClaimType,
@@ -33,6 +44,27 @@ const APPLICABILITY: Applicability[] = ['적용 가능', '적용 불가', '미�
 const FIX_KINDS: FixKind[] = ['교정안', '인용형', '축소안', '없음'];
 const QUALIFIER_RESULTS: QualifierCheck['result'][] = ['출처와 같다', '출처와 다르다', '확인하지 못했다'];
 const NO_FIX: Fix = { kind: '없음', instruction: '', sourceNo: null };
+/** 인용형의 고칠 내용. 출처의 이름을 밝히는 것 말고는 원고를 바꾸지 않도록 코드가 정해 둔 말만 쓴다 */
+export const CITE_INSTRUCTION = '이 출처의 설명임을 밝혀 쓴다';
+/** 글자와 숫자만 남기고 견줘 이만큼 이어서 같으면, 한쪽이 다른 쪽을 옮겼거나 둘이 같은 글을 옮긴 것으로 본다 */
+const COPIED_RUN = 40;
+
+const lettersOnly = (text: string) =>
+  text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+
+/** 두 글에 길게 이어지는 같은 대목이 있는지. 띄어쓰기와 문장 부호의 차이는 무시한다 */
+export function sharesLongRun(a: string, b: string, run: number = COPIED_RUN): boolean {
+  const x = lettersOnly(a);
+  const y = lettersOnly(b);
+  if (x.length < run || y.length < run) return false;
+  const seen = new Set<string>();
+  for (let i = 0; i + run <= x.length; i += 1) seen.add(x.slice(i, i + run));
+  for (let i = 0; i + run <= y.length; i += 1) if (seen.has(y.slice(i, i + run))) return true;
+  return false;
+}
 
 /**
  * 인용문을 견줄 때 쓰는 꼴. 공백과 표의 칸 구분(' | ')의 차이는 무시한다.
@@ -110,6 +142,20 @@ export function applyRules(input: RuleInput): Judgment {
   const independent = (a: number, b: number) =>
     rootOf(a) !== rootOf(b) &&
     links.some((l) => l.status === '독립 추정' && ((l.a === a && l.b === b) || (l.a === b && l.b === a)));
+
+  // 서로 다른 곳이 낸 글인지: 사이트가 다르고, 글을 낸 곳의 이름(기관 목록의 이름, 모델이 적은 발행 주체)도 서로 겹치지 않아야 한다.
+  // 이름을 모르는 출처는 사이트로만 가린다
+  const namesOf = (no: number) => [sourceByNo.get(no)?.publisherHint ?? '', ratingOf(no)?.publisher ?? ''].filter(Boolean);
+  const samePublisher = (a: number, b: number) =>
+    siteOf(sourceByNo.get(a)?.hostname ?? '') === siteOf(sourceByNo.get(b)?.hostname ?? '') ||
+    namesOf(a).some((x) => namesOf(b).some((y) => samePublisherName(x, y)));
+  const textsOf = (no: number) => bundle.evidence.filter((e) => e.sourceNo === no).map((e) => e.text);
+  const copied = (a: number, b: number) => textsOf(a).some((x) => textsOf(b).some((y) => sharesLongRun(x, y)));
+  /**
+   * 서로 다른 확인으로 셀 수 있는 쌍인지. 모델이 독립의 단서를 찾지 못했더라도, 서로 다른 곳이 낸 글이고
+   * 한쪽이 다른 쪽을 옮겨 적은 글이 아니며 모델이 '중복'으로 적지 않았으면 그렇게 센다
+   */
+  const apart = (a: number, b: number) => a !== b && rootOf(a) !== rootOf(b) && !samePublisher(a, b) && !copied(a, b);
 
   // 1번, 4번, 5번: 인용문이 그 번호의 발췌에 있어야 하고, 대상·범위·시점이 모두 적용 가능해야 판정에 쓴다.
   // 위키처럼 근거로 쓰지 않는 자료의 발췌는 지지로도 반박으로도 세지 않는다(2번)
@@ -193,17 +239,27 @@ export function applyRules(input: RuleInput): Judgment {
     return { rule: '5번', note: `${relation} 근거가 없다` };
   };
 
-  /** 2번: '일치'에 필요한 근거(5.2절)를 채웠는지 */
-  const meets = (list: number[]): boolean => {
+  /**
+   * 2번: '일치'에 필요한 근거(5.2절)를 채웠는지.
+   * '서로 다른 곳'은 독립의 단서 없이, 서로 다른 곳이 낸 2등급 둘이라는 점만으로 채웠다는 뜻이다. 이때는 화면에 표시를 붙인다
+   */
+  const meets = (list: number[]): '채움' | '서로 다른 곳' | null => {
     const eligible = (o: RequirementOption) =>
       list.filter((no) => gradeOf(no) <= o.grade && (!o.docTypes || o.docTypes.includes(ratingOf(no)?.docType ?? '')));
-    return (requirement?.anyOf ?? []).some((o) => {
+    let byPublishers = false;
+    for (const o of requirement?.anyOf ?? []) {
       const found = eligible(o);
-      if (o.count <= 1) return found.length >= 1;
-      // 2등급이 둘이어도 독립이 확인되지 않으면 독립인 근거 하나로 센다
-      if (o.independent) return found.some((a) => found.some((b) => independent(a, b)));
-      return unique(found.map(rootOf)).length >= o.count;
-    });
+      if (o.count <= 1) {
+        if (found.length >= 1) return '채움';
+      } else if (o.independent) {
+        if (found.some((a) => found.some((b) => independent(a, b)))) return '채움';
+        // 같은 기관의 글 둘이나 옮겨 적은 글 둘은 한 출처로 센다
+        if (found.some((a) => found.some((b) => apart(a, b)))) byPublishers = true;
+      } else if (unique(found.map(rootOf)).length >= o.count) {
+        return '채움';
+      }
+    }
+    return byPublishers ? '서로 다른 곳' : null;
   };
 
   type Decision = { verdict: ModelVerdict; rule?: string; note?: string };
@@ -217,7 +273,11 @@ export function applyRules(input: RuleInput): Judgment {
 
     if (wanted === '일치') {
       if (support.length === 0) return { verdict: '근거 부족', ...whyNone('지지') };
-      if (meets(support)) return { verdict: '일치' };
+      const met = meets(support);
+      if (met) {
+        if (met === '서로 다른 곳') flags.push(TWO_PUBLISHERS_FLAG);
+        return { verdict: '일치' };
+      }
       const note = `'일치'에 필요한 근거를 채우지 못했다(${requirement?.need ?? ''})`;
       // 2등급 근거 하나뿐이어도, 특정 값이 달려 있지 않은 서술이고 글의 앞머리가 아니면 받아들이되 표시한다
       const hasGrade2 = support.some((no) => gradeOf(no) <= 2);
@@ -275,35 +335,56 @@ export function applyRules(input: RuleInput): Judgment {
   const looseQualifier = qualifiers.some((q) => q.result !== '출처와 같다');
   const partlyConfirmed = evidence.some((u) => u.usable) || (sameTarget && looseQualifier);
 
-  // 수정 방향(F7): 교정안은 '불일치'일 때만, 인용형은 2등급 이상의 출처일 때만 둔다
+  // 수정 방향(F7): 교정안은 '불일치'일 때만, 인용형은 원고와 같은 내용을 적은 2등급 이상의 출처가 있을 때만 둔다
   let fix: Fix = {
     kind: pick(model.fix?.kind, FIX_KINDS, '없음'),
     instruction: short(model.fix?.instruction, 200),
     sourceNo: model.fix?.source_no && ratingOf(model.fix.source_no) ? model.fix.source_no : null,
   };
+  /** 글에 적힌 수(두 자리 이상). 쉼표는 빼고 견준다 */
+  const numbersIn = (text: string) => new Set((text.replace(/(\d),(?=\d{3})/g, '$1').match(/\d+(?:\.\d+)?/g) ?? []).filter((n) => n.replace(/\D/g, '').length >= 2));
+  const numbersOfSource = (no: number) => numbersIn(textsOf(no).join('\n'));
+  /**
+   * 인용형으로 이름을 밝혀도 되는 출처인지. "그 출처에 따르면"이라는 말이 사실이어야 하므로 아래를 모두 채워야 한다.
+   * - 2등급 이상이고, 원고와 같은 내용을 적은 근거(판정에 쓴 지지 근거)가 그 출처에 있다
+   * - 명제에 적힌 수(연도, 수량)와 기관 이름이 그 출처의 발췌에 모두 있다.
+   *   모델이 명제의 일부만 확인해 준 근거를 지지로 적는 일이 있어, 값이나 이름이 다른 출처의 이름을 붙이지 않도록 코드가 한 번 더 본다
+   */
+  const citable = (no: number | null): no is number => {
+    if (no === null || gradeOf(no) > 2 || !support.includes(no)) return false;
+    const squeezed = textsOf(no).join('\n').replace(/\s+/g, '');
+    return [...numbersIn(claim.statement)].every((n) => numbersOfSource(no).has(n)) && institutionNames(claim.statement).every((name) => squeezed.includes(name));
+  };
+  // 인용형의 고칠 내용은 코드가 정해 둔 말만 쓴다. 모델이 덧붙인 말(다른 표현으로 바꿔 쓰라는 것 등)은 수정안에 넣지 않는다
+  const citing = (no: number): Fix => ({ kind: '인용형', instruction: CITE_INSTRUCTION, sourceNo: no });
+  // 이름을 밝힐 출처는 모델이 고른 것만 받는다. 코드가 다른 지지 출처로 바꿔 넣지 않는다.
+  // 지지로 적힌 근거가 명제의 일부만 확인해 준 것일 때가 있어, 코드가 고르면 확인하지 않은 부분까지 그 출처의 말이 된다
+  const chosen = fix.kind === '인용형' && citable(fix.sourceNo) ? fix.sourceNo : undefined;
   if (verdict === '일치') {
     fix = NO_FIX;
   } else if (unresolved && verdict === '해석 주의') {
-    // 근거가 엇갈린 명제에는 교정안을 만들지 않는다. 2등급 이상 출처의 이름을 밝힌 인용형을 내거나 수정안을 내지 않는다
-    const keep = fix.kind === '인용형' && fix.sourceNo !== null && gradeOf(fix.sourceNo) <= 2;
-    if (!keep) {
-      const fromSupport = support.filter((no) => gradeOf(no) <= 2).sort((a, b) => gradeOf(a) - gradeOf(b))[0];
-      const fromRefute = refute.filter((no) => gradeOf(no) <= 2).sort((a, b) => gradeOf(a) - gradeOf(b))[0];
-      const named = fromSupport ?? fromRefute;
-      if (named === undefined) {
-        fix = NO_FIX;
-      } else {
-        // 수정안에 밝힐 이름과 같은 순서로 고른다(lib/merge/plan.ts의 citedSourceName): 기관 목록의 이름, 판정이 적은 발행 주체, 사이트 주소
-        const info = sourceByNo.get(named);
-        const name = info?.publisherHint || ratingOf(named)?.publisher || info?.hostname.replace(/^www\./, '') || '';
-        const detail = fromSupport === undefined && fix.kind === '교정안' && fix.instruction ? ` 그 출처의 내용: ${fix.instruction}` : '';
-        fix = { kind: '인용형', instruction: `출처(${name})의 설명임을 밝혀 쓴다.${detail}`.slice(0, 200), sourceNo: named };
-      }
+    // 근거가 엇갈린 명제에는 교정안을 그대로 내지 않는다
+    const fromRefute = refute.filter((no) => gradeOf(no) <= 2).sort((a, b) => gradeOf(a) - gradeOf(b))[0];
+    const added = [...numbersIn(fix.instruction)].filter((n) => !numbersIn(claim.statement).has(n));
+    if (chosen !== undefined) {
+      // 모델이 고른 출처가 원고와 같은 내용을 적고 있으면 그 이름을 밝힌다
+      fix = citing(chosen);
+    } else if (fromRefute !== undefined && conflict.supportTop === 3 && fix.kind === '교정안' && fix.instruction && added.every((n) => numbersOfSource(fromRefute).has(n))) {
+      // 모델은 틀렸다고 봤는데 3등급 자료의 지지가 섞여 '해석 주의'가 된 경우다. 원고와 다르게 적은 2등급 이상 출처의 내용으로 바꾸고 그 이름을 밝힌다.
+      // 지지 쪽에도 2등급 이상 출처가 있으면 이렇게 하지 않는다. 믿을 만한 출처끼리 엇갈릴 때 한쪽 값으로 바꾸면 맞는 원고를 틀리게 고칠 수 있다.
+      // 바꿔 넣을 수가 그 출처의 발췌에 있어야 한다. 반박 출처가 여럿이고 값이 서로 다를 수 있기 때문이다.
+      // 수정안에 밝힐 이름과 같은 순서로 고른다(lib/merge/plan.ts의 citedSourceName): 기관 목록의 이름, 판정이 적은 발행 주체, 사이트 주소
+      const info = sourceByNo.get(fromRefute);
+      const name = info?.publisherHint || ratingOf(fromRefute)?.publisher || info?.hostname.replace(/^www\./, '') || '';
+      fix = { kind: '인용형', instruction: `출처(${name})의 설명임을 밝혀 쓴다. 그 출처의 내용: ${fix.instruction}`.slice(0, 200), sourceNo: fromRefute };
+    } else {
+      // 원고와 다르게 적은 출처의 이름을 붙이면서 원고의 내용을 그대로 두지는 않는다
+      fix = NO_FIX;
     }
   } else if (fix.kind === '교정안' && verdict !== '불일치') {
     fix = NO_FIX;
-  } else if (fix.kind === '인용형' && (fix.sourceNo === null || gradeOf(fix.sourceNo) > 2)) {
-    fix = NO_FIX;
+  } else if (fix.kind === '인용형') {
+    fix = chosen === undefined ? NO_FIX : citing(chosen);
   } else if (fix.kind === '축소안' && !partlyConfirmed) {
     fix = NO_FIX;
   } else if (fix.kind === '없음') {

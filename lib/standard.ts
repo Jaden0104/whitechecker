@@ -46,7 +46,8 @@ export interface Standard {
   priority: { about: string; high: string[]; mid: string[]; low: string[] };
   domains: {
     about: string;
-    institutions: Array<{ domain: string; publisher: string }>;
+    /** formerNames는 그 기관의 예전 이름이다. 글을 낸 곳이 같은지 견줄 때 지금 이름과 같은 것으로 본다 */
+    institutions: Array<{ domain: string; publisher: string; formerNames?: string[] }>;
     lowGradePlatforms: string[];
     excluded: Array<{ domain: string; why: string }>;
     provisional: { about: string; grade2: string[]; suffixes: Array<{ suffix: string; grade: Grade }> };
@@ -68,6 +69,35 @@ export function hostMatches(hostname: string, domain: string): boolean {
 /** 기관 도메인 목록에서 찾은 기관 이름. 없으면 빈 문자열 */
 export function institutionOf(hostname: string): string {
   return STANDARD.domains.institutions.find((i) => hostMatches(hostname, i.domain))?.publisher ?? '';
+}
+
+const squeezeName = (name: string) =>
+  name
+    .normalize('NFKC')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+    .toLowerCase();
+
+const FORMER_NAMES: Array<{ old: string; now: string }> = STANDARD.domains.institutions.flatMap((i) =>
+  (i.formerNames ?? []).map((old) => ({ old: squeezeName(old), now: squeezeName(i.publisher) })),
+);
+
+/**
+ * 글을 낸 곳의 이름을 견줄 때 쓰는 꼴. 괄호 속 덧붙임과 띄어쓰기를 빼고, 기관의 예전 이름은 지금 이름으로 바꾼다.
+ * 예: '국가유산청(국가유산포털)'과 '문화재청'은 모두 '국가유산청'이 된다
+ */
+export function publisherKey(name: string): string {
+  let key = squeezeName(name);
+  for (const { old, now } of FORMER_NAMES) if (old && key.includes(old)) key = key.replace(old, now);
+  return key;
+}
+
+/** 두 이름이 같은 곳을 가리키는지. 한쪽이 다른 쪽을 품고 있어도 같은 곳으로 본다(예: '국가유산청'과 '국가유산청 국가유산포털') */
+export function samePublisherName(a: string, b: string): boolean {
+  const x = publisherKey(a);
+  const y = publisherKey(b);
+  if (x.length < 2 || y.length < 2) return false;
+  return x === y || x.includes(y) || y.includes(x);
 }
 
 /** 블로그, 커뮤니티 플랫폼인지. 여기에 실린 글은 문서 종류와 상관없이 3등급으로 묶는다 */

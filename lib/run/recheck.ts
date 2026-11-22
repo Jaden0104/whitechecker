@@ -6,9 +6,10 @@
 import { followingText } from '../chunks.ts';
 import { LIMITS } from '../limits.ts';
 import { stripMarkup } from '../sentences.ts';
-import type { Usage } from '../types.ts';
+import type { EvidenceBundle, Usage } from '../types.ts';
+import { gainedEvidence, missingNote, needsFollowUp } from './followup.ts';
 import { canRecheck, isLead, reviewOf, type ClaimEntry, type RecheckEntry, type RunState, type Step } from './model.ts';
-import type { RunApi, RunStore } from './runner.ts';
+import type { GatherRequest, RunApi, RunStore } from './runner.ts';
 
 export function createRechecker(store: RunStore, api: RunApi, options: { now?: () => number } = {}) {
   const now = options.now ?? (() => Date.now());
@@ -92,40 +93,52 @@ export function createRechecker(store: RunStore, api: RunApi, options: { now?: (
           .map(async ({ claim }) => {
             setClaim(claim.id, { state: '진행 중', step: '근거 모으기' });
             const queries = claim.queries.filter(Boolean);
-            const gathered = await api.gather(
-              {
-                statement: claim.statement,
-                type: claim.type,
-                qualifiers: claim.qualifiers,
-                asOf: claim.asOf,
-                queries: queries.length > 0 ? queries : [claim.statement.slice(0, 120)],
-                counterQuery: claim.counterQuery,
-                isPublic: true,
-              },
-              signal,
-            );
+            const request: GatherRequest = {
+              statement: claim.statement,
+              type: claim.type,
+              qualifiers: claim.qualifiers,
+              asOf: claim.asOf,
+              queries: queries.length > 0 ? queries : [claim.statement.slice(0, 120)],
+              counterQuery: claim.counterQuery,
+              isPublic: true,
+            };
+            const gathered = await api.gather(request, signal);
             if (!alive()) return;
             if (!gathered.ok) {
               setClaim(claim.id, { state: gathered.aborted ? '중단' : '실패', step: '', failure: gathered.aborted ? '' : gathered.reason });
               return;
             }
             setClaim(claim.id, { bundle: gathered.bundle, signature: gathered.signature, step: '판정' }, gathered.usage);
-            const judged = await api.judge(
-              {
-                claim: { statement: claim.statement, type: claim.type, qualifiers: claim.qualifiers, asOf: claim.asOf },
-                sentence: plain,
-                lead,
-                bundle: gathered.bundle,
-                signature: gathered.signature,
-              },
-              signal,
-            );
+            const judgeWith = (bundle: EvidenceBundle, signature: string) =>
+              api.judge({ claim: { statement: claim.statement, type: claim.type, qualifiers: claim.qualifiers, asOf: claim.asOf }, sentence: plain, lead, bundle, signature }, signal);
+            const judged = await judgeWith(gathered.bundle, gathered.signature);
             if (!alive()) return;
             if (!judged.ok) {
               setClaim(claim.id, { state: judged.aborted ? '중단' : '실패', step: '', failure: judged.aborted ? '' : judged.reason });
               return;
             }
-            setClaim(claim.id, { state: '완료', step: '', judgment: judged.judgment }, judged.usage);
+            let judgment = judged.judgment;
+            let usage = judged.usage;
+            // 처음 검증과 같이, 근거가 모자라 판정하지 못했으면 한 번 더 찾아보고 새 근거가 실렸을 때만 다시 판정한다(보강 검색).
+            // 한 번 더 찾지 못했거나 다시 판정하지 못했으면 처음 판정을 그대로 쓴다
+            if (needsFollowUp(judgment, gathered.bundle)) {
+              setClaim(claim.id, { step: '근거 모으기' }, usage);
+              usage = [];
+              const more = await api.gather({ ...request, more: { bundle: gathered.bundle, signature: gathered.signature, missing: missingNote(judgment) } }, signal);
+              if (!alive()) return;
+              if (more.ok) {
+                setClaim(claim.id, { bundle: more.bundle, signature: more.signature, step: '판정' }, more.usage);
+                if (gainedEvidence(gathered.bundle, more.bundle)) {
+                  const again = await judgeWith(more.bundle, more.signature);
+                  if (!alive()) return;
+                  if (again.ok) {
+                    judgment = again.judgment;
+                    usage = again.usage;
+                  }
+                }
+              }
+            }
+            setClaim(claim.id, { state: '완료', step: '', judgment }, usage);
           }),
       );
       if (alive()) patch((entry) => ({ ...entry, state: '완료', failure: '' }));

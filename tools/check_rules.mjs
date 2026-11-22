@@ -1,7 +1,9 @@
 // 판정의 코드 규칙(PRD 5.3절)이 기대대로 동작하는지 확인한다. Liner를 부르지 않는다.
 // 모델이 이렇게 답했다고 치고, 코드가 판정을 어떻게 확정하는지를 본다.
 // 사용: node tools/check_rules.mjs
-import { applyRules, squeezeQuote } from '../lib/judge/rules.ts';
+import { TWO_PUBLISHERS_FLAG } from '../lib/flags.ts';
+import { CITE_INSTRUCTION, applyRules, sharesLongRun, squeezeQuote } from '../lib/judge/rules.ts';
+import { publisherKey, samePublisherName } from '../lib/standard.ts';
 
 let failed = 0;
 function expect(label, actual, wanted) {
@@ -10,7 +12,8 @@ function expect(label, actual, wanted) {
   console.log(`${ok ? '통과' : '실패'}  ${label}${ok ? '' : `  (기대 ${wanted}, 실제 ${actual})`}`);
 }
 
-// 출처: 기관(목록에 있음), 백과, 블로그 플랫폼, 언론 둘, 논문, 목록에 없는 위키, 기준을 바꾸기 전에 모은 묶음에 남은 위키백과
+// 출처: 기관(목록에 있음), 백과, 블로그 플랫폼, 언론 둘, 논문, 목록에 없는 위키, 기준을 바꾸기 전에 모은 묶음에 남은 위키백과.
+// 9~13은 '서로 다른 곳이 낸 글'을 가리는 데 쓴다: 백과와 같은 기관의 다른 사이트, 국가유산청의 두 사이트, 정책브리핑, 백과의 글을 옮겨 실은 곳
 const SOURCES = [
   { no: 1, hostname: 'www.gogung.go.kr', publisherHint: '국립고궁박물관', lowPlatform: false },
   { no: 2, hostname: 'encykorea.aks.ac.kr', publisherHint: '한국학중앙연구원', lowPlatform: false },
@@ -20,6 +23,11 @@ const SOURCES = [
   { no: 6, hostname: 'www.kci.go.kr', publisherHint: '', lowPlatform: false },
   { no: 7, hostname: 'wiki.example.org', publisherHint: '', lowPlatform: false },
   { no: 8, hostname: 'ko.wikipedia.org', publisherHint: '', lowPlatform: true },
+  { no: 9, hostname: 'dh.aks.ac.kr', publisherHint: '한국학중앙연구원', lowPlatform: false },
+  { no: 10, hostname: 'www.khs.go.kr', publisherHint: '국가유산청', lowPlatform: false },
+  { no: 11, hostname: 'www.heritage.go.kr', publisherHint: '국가유산청(국가유산포털)', lowPlatform: false },
+  { no: 12, hostname: 'www.korea.kr', publisherHint: '대한민국 정책브리핑', lowPlatform: false },
+  { no: 13, hostname: 'www.example-museum.or.kr', publisherHint: '', lowPlatform: false },
 ].map((s) => ({
   ...s,
   url: `https://${s.hostname}/a`,
@@ -40,6 +48,11 @@ const TEXTS = {
   6: '태조본 각석은 1395년에 제작되었다. 이 연구는 각석을 직접 조사했다.',
   7: '각석의 크기는 세로 311cm이다. 태조 때 만든 석각천문도로 세계에서 가장 오래되었다.',
   8: '천상열차분야지도 각석의 세로는 311cm이다.',
+  9: '이 각석은 태조 4년인 1395년에 돌에 새겼다.',
+  10: '각석은 조선 태조 4년(1395)에 제작하였다.',
+  11: '태조 4년(1395) 12월에 돌에 새겨 완성한 천문도이다.',
+  12: '각석은 1395년에 만들어졌다고 밝혔다.',
+  13: '소개 글. 천상열차분야지도 각석은 1395년(태조 4)에 만든 석각천문도이다. 세계에서 두 번째로 오래된 석각천문도이다.',
 };
 const bundleOf = (nos) => ({
   v: 1,
@@ -52,7 +65,21 @@ const bundleOf = (nos) => ({
   premium: [],
 });
 // 8번은 모델이 위키백과를 백과사전으로 잘못 골랐다고 친다
-const DOC = { 1: '기관의 공식 안내', 2: '백과사전', 3: '블로그·커뮤니티 글', 4: '언론 보도', 5: '언론 보도', 6: '학술 논문', 7: '위키', 8: '백과사전' };
+const DOC = {
+  1: '기관의 공식 안내',
+  2: '백과사전',
+  3: '블로그·커뮤니티 글',
+  4: '언론 보도',
+  5: '언론 보도',
+  6: '학술 논문',
+  7: '위키',
+  8: '백과사전',
+  9: '기관의 해설 글',
+  10: '기관의 해설 글',
+  11: '기관의 해설 글',
+  12: '기관의 해설 글',
+  13: '기관의 해설 글',
+};
 const ev = (no, relation, quote, over = {}) => ({ evidence_no: no, relation, target: '적용 가능', scope: '적용 가능', time: '적용 가능', quote, ...over });
 function model(verdict, evidence, over = {}) {
   return {
@@ -110,9 +137,9 @@ expect('기관이 직접 정하는 사실이 아니면 2등급이라 운영 정�
 console.log('\n[유형별 요구 수준]');
 const two = [ev(2, '지지', '1395년(태조 4)에 만든'), ev(6, '지지', '1395년에 제작되었다')];
 j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('일치', two));
-expect('2등급 둘이어도 독립의 단서가 없으면 근거 부족', j.verdict, '근거 부족');
+expect('서로 다른 곳이 낸 2등급 둘이면 독립의 단서가 없어도 일치, 표시를 붙인다', `${j.verdict}/${j.flags.join()}`, `일치/${TWO_PUBLISHERS_FLAG}`);
 j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('일치', two, { links: [{ a: 2, b: 6, status: '독립 추정', reason: '직접 조사' }] }));
-expect('독립 추정인 2등급 둘이면 일치', j.verdict, '일치');
+expect('독립 추정인 2등급 둘이면 일치, 표시는 붙이지 않는다', `${j.verdict}/${j.flags.join()}`, '일치/');
 j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('일치', two, { links: [{ a: 2, b: 6, status: '중복', reason: '같은 자료' }] }));
 expect('중복이면 한 출처로 세어 근거 부족', j.verdict, '근거 부족');
 j = run('연대·인명·기관명', '각석은 태조 때 만든 석각천문도다', model('일치', [ev(2, '지지', '만든 석각천문도이다')]));
@@ -123,6 +150,56 @@ j = run('통설', '각석은 태조 때 만든 것으로 전한다', model('일�
 expect('통설은 못 채우면 해석 주의', j.verdict, '해석 주의');
 j = run('운영 정보', '박물관은 10시부터 18시까지 문을 연다', model('일치', [ev(4, '지지', '오전 10시부터 오후 6시까지'), ev(5, '지지', '오전 10시부터 오후 6시까지')]));
 expect('운영 정보는 여러 보도가 같으면 해석 주의', j.verdict, '해석 주의');
+
+console.log('\n[서로 다른 곳이 낸 2등급 둘]');
+const year = '각석은 1395년에 만들었다';
+const Q = {
+  2: '1395년(태조 4)에 만든',
+  9: '1395년에 돌에 새겼다',
+  10: '태조 4년(1395)에 제작하였다',
+  11: '태조 4년(1395) 12월에',
+  12: '1395년에 만들어졌다고',
+  13: '1395년(태조 4)에 만든',
+};
+const pair = (a, b, over = {}) => run('연대·인명·기관명', year, model('일치', [ev(a, '지지', Q[a]), ev(b, '지지', Q[b])], over));
+const rated = (a, pa, b, pb) => ({
+  sources: [
+    { source_no: a, doc_type: '기관의 해설 글', publisher: pa, own_fact: false },
+    { source_no: b, doc_type: '기관의 해설 글', publisher: pb, own_fact: false },
+  ],
+});
+j = pair(2, 9);
+expect('같은 기관의 두 사이트에 실린 글은 한 출처로 세어 근거 부족', j.verdict, '근거 부족');
+j = pair(10, 11);
+expect('사이트가 달라도 기관 이름이 같으면 한 출처로 센다(국가유산청과 국가유산포털)', j.verdict, '근거 부족');
+j = pair(10, 12, rated(10, '국가유산청', 12, '문화재청'));
+expect('모델이 적은 발행 주체가 그 기관의 예전 이름이어도 같은 곳으로 본다(문화재청)', j.verdict, '근거 부족');
+j = pair(10, 12, rated(10, '국가유산청', 12, '국립중앙과학관'));
+expect('  발행 주체가 다른 기관이면 서로 다른 곳이 낸 둘로 센다', `${j.verdict}/${j.flags.join()}`, `일치/${TWO_PUBLISHERS_FLAG}`);
+j = pair(2, 13);
+expect('다른 곳이 낸 글이어도 한쪽이 옮겨 적은 글이면 한 출처로 센다', j.verdict, '근거 부족');
+j = pair(2, 10, { links: [{ a: 2, b: 10, status: '중복', reason: '같은 보도자료' }] });
+expect('모델이 중복이라고 한 쌍은 서로 다른 곳이어도 한 출처로 센다', j.verdict, '근거 부족');
+j = run('연대·인명·기관명', year, model('일치', [ev(2, '지지', Q[2]), ev(4, '지지', '오전 10시부터 오후 6시까지')]));
+expect('2등급 하나와 3등급 하나는 서로 다른 곳이어도 채우지 못한다', j.verdict, '근거 부족');
+j = run('통설', '각석은 태조 때 만든 것으로 전한다', model('일치', [ev(2, '지지', '만든 석각천문도이다'), ev(10, '지지', '제작하였다')]));
+expect('통설도 서로 다른 곳이 낸 2등급 둘이면 일치', `${j.verdict}/${j.flags.join()}`, `일치/${TWO_PUBLISHERS_FLAG}`);
+j = run('인과', '각석은 태조의 명으로 만들었다', model('일치', [ev(2, '지지', '만든 석각천문도이다'), ev(10, '지지', '제작하였다')]));
+expect('인과는 학술 논문이 아닌 2등급 둘로는 채우지 못한다', j.verdict, '근거 부족');
+j = run('운영 정보', '박물관은 10시부터 18시까지 문을 연다', model('일치', [ev(2, '지지', '만든 석각천문도이다'), ev(10, '지지', '제작하였다')]));
+expect('1등급만 받는 유형은 서로 다른 곳이 낸 2등급 둘로도 채우지 못한다', j.verdict, '근거 부족');
+expect('괄호 속 덧붙임은 빼고 견준다', publisherKey('국가유산청(국가유산포털)'), '국가유산청');
+expect('예전 이름은 지금 이름으로 바꿔 견준다', samePublisherName('문화재청', '국가유산청'), true);
+expect('한쪽이 다른 쪽을 품으면 같은 곳', samePublisherName('국가유산청 국가유산포털', '국가유산청'), true);
+expect('다른 기관은 다른 곳', samePublisherName('국가기록원', '국가유산청'), false);
+expect('이름을 모르면 같다고 보지 않는다', samePublisherName('', '국가유산청'), false);
+const longText = '청주 흥덕사지는 1985년 발굴조사 때 금당터와 서회랑터, 강당터가 확인되었고 흥덕사라고 새겨진 쇠북 조각이 나와 절의 이름을 알게 되었다.';
+expect('긴 대목이 그대로 겹치면 옮겨 적은 글(띄어쓰기는 무시)', sharesLongRun(`머리말. ${longText}`, `${longText.replace(/ /g, '')} 꼬리말`), true);
+expect(
+  '이름과 연도만 겹치는 정도는 옮겨 적은 글이 아니다',
+  sharesLongRun('백운화상초록불조직지심체요절은 1377년 청주 흥덕사에서 찍었다.', '1377년에 흥덕사에서 간행한 백운화상초록불조직지심체요절(직지)이다.'),
+  false,
+);
 
 console.log('\n[불일치]');
 const wrongSize = '각석의 세로는 311cm다';
@@ -140,6 +217,38 @@ expect('1등급 반박과 3등급 지지가 함께 있으면 해석 주의(6번)
 expect('  교정안 대신 2등급 이상 출처를 밝힌 인용형', `${j.fix.kind}/${j.fix.sourceNo}`, '인용형/1');
 expect('  편집자가 골라야 한다고 표시', j.needChoice, true);
 expect('  양쪽의 가장 높은 등급을 남긴다', `${j.conflict.supportTop}/${j.conflict.refuteTop}`, '3/1');
+expect('  그 출처의 내용으로 바꾸라는 말을 함께 적는다', j.fix.instruction.includes('그 출처의 내용: 세로 311cm를 211cm로 고친다'), true);
+j = run('제원·실측', wrongSize, model('해석 주의', mixed, { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 1 } }));
+expect('원고와 다르게 적은 출처의 이름을 붙이면서 원고의 내용을 그대로 두지는 않는다', `${j.verdict}/${j.fix.kind}`, '해석 주의/없음');
+const bothSides = [ev(2, '지지', '1395년(태조 4)에 만든'), ev(10, '반박', '태조 4년(1395)에 제작하였다')];
+j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('해석 주의', bothSides, { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 2 } }));
+expect(
+  '엇갈릴 때 모델이 고른 출처가 원고와 같은 내용을 적고 있으면 그 이름만 밝힌다',
+  `${j.verdict}/${j.fix.kind}/${j.fix.sourceNo}/${j.fix.instruction}`,
+  `해석 주의/인용형/2/${CITE_INSTRUCTION}`,
+);
+j = run('연대·인명·기관명', '각석은 1395년에 만들었다', model('불일치', bothSides, { fix: { kind: '교정안', instruction: '1395년을 1396년으로 고친다', source_no: 0 } }));
+expect('  모델이 고르지 않았으면 코드가 지지 출처를 골라 이름을 붙이지 않는다', `${j.verdict}/${j.fix.kind}`, '해석 주의/없음');
+// 2등급 이상 출처끼리 엇갈린다: 백과(2등급)는 1395년, 국가유산청(2등급)은 1396년이라고 적었다고 친다
+const disputed = {
+  ...bundleOf([2]),
+  evidence: [
+    { no: 2, sourceNo: 2, text: TEXTS[2] },
+    { no: 10, sourceNo: 10, text: '각석은 조선 태조 5년(1396)에 제작하였다.' },
+  ],
+};
+const dispute = (over) =>
+  applyRules({
+    claim: { statement: '각석은 1395년에 만들었다', type: '연대·인명·기관명', lead: false },
+    bundle: disputed,
+    model: model('불일치', [ev(2, '지지', '1395년(태조 4)에 만든'), ev(10, '반박', '태조 5년(1396)에 제작하였다')], { fix: { kind: '교정안', instruction: '1395년을 1396년으로 고친다', source_no: 0 }, ...over }),
+    sentenceKey: 'k',
+  });
+j = dispute({});
+expect('2등급 이상 출처끼리 엇갈리면 반박 쪽 값으로 바꾸는 수정안을 내지 않는다', `${j.verdict}/${j.conflict.supportTop}/${j.fix.kind}`, '해석 주의/2/없음');
+// 지지는 블로그(3등급)뿐이고 반박은 기관(1등급)인 경우에만 그 기관의 내용으로 바꾼다(위의 '교정안 대신 … 인용형'). 바꿔 넣을 수가 발췌에 없으면 그것도 하지 않는다
+j = run('제원·실측', wrongSize, model('불일치', mixed, { fix: { kind: '교정안', instruction: '세로 311cm를 212cm로 고친다', source_no: 0 } }));
+expect('  바꿔 넣을 수(212)가 반박 출처의 발췌에 없으면 그 출처의 이름으로 고치지 않는다', `${j.verdict}/${j.fix.kind}`, '해석 주의/없음');
 j = run('최상급', '각석은 세계에서 가장 오래된 천문도다', model('해석 주의', [ev(3, '지지', '세계에서 가장 오래된 천문도다'), ev(4, '반박', '오전 10시부터')]));
 expect('엇갈리는 근거가 모두 3등급이면 근거 부족', j.verdict, '근거 부족');
 const fixed = { state: '바로잡은 자료로 풀림', correcting_evidence_no: 1, correcting_quote: '세로: 211㎝, 가로: 123㎝' };
@@ -177,6 +286,39 @@ expect('블로그 플랫폼의 글은 전과 같이 3등급 근거로 센다(엇
 console.log('\n[수정 방향과 우선순위]');
 j = run('최상급', '각석은 세계에서 가장 오래된 천문도다', model('해석 주의', [ev(2, '반박', '세계에서 두 번째로 오래된', { scope: '미확인' })], { fix: { kind: '인용형', instruction: '블로그의 설명임을 밝힌다', source_no: 3 } }));
 expect('평가하지 않은 출처를 밝히라는 인용형은 받지 않는다', j.fix.kind, '없음');
+const hearsay = '각석은 태조 때 만든 것으로 전한다';
+j = run('통설', hearsay, model('해석 주의', [ev(2, '지지', '만든 석각천문도이다')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀, 태조 때 만들었다고 전해진다고 쓴다', source_no: 2 } }));
+expect('인용형의 고칠 내용은 코드가 정해 둔 말만 쓴다', `${j.fix.kind}/${j.fix.sourceNo}/${j.fix.instruction}`, `인용형/2/${CITE_INSTRUCTION}`);
+j = run('통설', hearsay, model('해석 주의', [ev(2, '지지', '만든 석각천문도이다'), ev(10, '판단 불충분', '제작하였다')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 10 } }));
+expect('모델이 고른 출처에 지지 근거가 없으면 인용형을 두지 않는다(코드가 다른 출처로 바꿔 넣지 않는다)', j.fix.kind, '없음');
+j = run('통설', '각석은 1395년에 만든 것으로 전한다', model('해석 주의', [ev(12, '지지', '1395년에 만들어졌다고')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 12 } }));
+expect('명제의 수가 그 출처의 발췌에 있으면 인용형을 둔다', `${j.fix.kind}/${j.fix.sourceNo}`, '인용형/12');
+j = run('통설', '각석은 1396년에 만든 것으로 전한다', model('해석 주의', [ev(12, '지지', '1395년에 만들어졌다고')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 12 } }));
+expect('명제의 수가 그 출처의 발췌에 없으면 인용형을 두지 않는다', j.fix.kind, '없음');
+// 모델이 명제의 일부만 확인해 준 근거를 지지로 적은 경우: 출처는 도서관이라고 적었는데 원고는 박물관이라고 썼다
+const holders = {
+  ...bundleOf([]),
+  evidence: [{ no: 2, sourceNo: 2, text: '목판본은 한국학중앙연구원 장서각과 국립중앙도서관에 소장되어 있다.' }],
+};
+const cite2 = { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 2 };
+j = applyRules({
+  claim: { statement: '목판본은 한국학중앙연구원과 국립중앙박물관에 전합니다', type: '통설', lead: false },
+  bundle: holders,
+  model: model('해석 주의', [ev(2, '지지', '한국학중앙연구원 장서각과 국립중앙도서관에')], { fix: cite2 }),
+  sentenceKey: 'k',
+});
+expect('명제의 기관 이름이 그 출처의 발췌에 없으면 인용형을 두지 않는다(박물관과 도서관)', j.fix.kind, '없음');
+j = applyRules({
+  claim: { statement: '목판본은 한국학중앙연구원과 국립중앙도서관에 전합니다', type: '통설', lead: false },
+  bundle: holders,
+  model: model('해석 주의', [ev(2, '지지', '한국학중앙연구원 장서각과 국립중앙도서관에')], { fix: cite2 }),
+  sentenceKey: 'k',
+});
+expect('  기관 이름이 모두 있으면 둔다(조사가 붙어 있어도 찾는다)', `${j.fix.kind}/${j.fix.sourceNo}`, '인용형/2');
+j = run('통설', hearsay, model('해석 주의', [ev(3, '지지', '세계에서 가장 오래된 천문도다'), ev(10, '판단 불충분', '제작하였다')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 10 } }));
+expect('원고와 같은 내용을 적은 2등급 이상 출처가 없으면 인용형을 두지 않는다', j.fix.kind, '없음');
+j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝')], { fix: { kind: '인용형', instruction: '이 출처의 설명임을 밝혀 쓴다', source_no: 1 } }));
+expect('불일치에는 인용형을 두지 않는다(원고와 다르게 적은 출처다)', `${j.verdict}/${j.fix.kind}`, '불일치/없음');
 j = run('최상급', '각석은 세계에서 가장 오래된 천문도다', model('해석 주의', [ev(2, '반박', '세계에서 두 번째로 오래된', { scope: '미확인' })], { fix: { kind: '교정안', instruction: '두 번째로 고친다', source_no: 0 } }));
 expect('불일치가 아니면 교정안을 두지 않는다', `${j.verdict}/${j.fix.kind}`, '해석 주의/없음');
 j = run('제원·실측', wrongSize, model('불일치', [ev(1, '반박', '세로: 211㎝')], { priority: '하' }), { lead: true });

@@ -4,7 +4,7 @@ import { claimKey } from '../evidence.ts';
 import { LIMITS } from '../limits.ts';
 import { LinerError, chatJson, searchWeb, type Budget, type SearchHit, type SearchOptions } from '../liner.ts';
 import { decodeBody, safeGet } from '../net/safe-get.ts';
-import { MORE_SEARCH_SCHEMA, MORE_SEARCH_SYSTEM, moreSearchUserMessage } from '../prompts/more-search.ts';
+import { FOLLOW_UP_SYSTEM, MORE_SEARCH_SCHEMA, MORE_SEARCH_SYSTEM, followUpUserMessage, moreSearchUserMessage } from '../prompts/more-search.ts';
 import { STANDARD, hostMatches, requirementMetBeforeJudging } from '../standard.ts';
 import type {
   Claim,
@@ -64,14 +64,14 @@ function searchPlan(claim: GatherClaim): PlanItem[] {
   const plan: PlanItem[] = basics.map((query, i) => ({
     query,
     kind: '기본',
-    maxResults: 6,
+    maxResults: LIMITS.gather.maxResults,
     // 검색 가운데 한 번은 최근 1년으로 좁혀 바뀐 내용을 찾는다
     dateRange: recent && i === 1 ? 'past_year' : undefined,
     // Premium Data는 수치·통계 유형에서만 받는다
     includeKnowledge: claim.type === '수치·통계' && i === 0,
   }));
   if (claim.counterQuery.trim()) {
-    plan.push({ query: claim.counterQuery.trim(), kind: '반증', maxResults: 5, includeKnowledge: false });
+    plan.push({ query: claim.counterQuery.trim(), kind: '반증', maxResults: LIMITS.gather.maxResults, includeKnowledge: false });
   }
   return plan;
 }
@@ -121,19 +121,9 @@ async function openPage(candidate: Candidate, timeoutMs: number, keywords: Keywo
   };
 }
 
-export async function gatherEvidence(
-  claim: GatherClaim,
-  key: string,
-  budget: Budget,
-): Promise<{ bundle: EvidenceBundle; usage: Usage[] }> {
-  const usage: Usage[] = [];
-  const searches: SearchRecord[] = [];
-  const premium: PremiumData[] = [];
-  const keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery].filter(Boolean));
-  const relevanceOf = (text: string) => textRelevance(keywords, text);
-
-  // 검색 한 번. 실패해도 나머지 검색은 계속한다
-  const search = async (item: PlanItem): Promise<Batch | LinerError> => {
+/** 검색 한 번을 하고 기록(검색 내역, 사용량, Premium Data)을 남기는 함수를 만든다. 실패해도 던지지 않고 실패를 돌려준다 */
+function makeSearcher(key: string, budget: Budget, searches: SearchRecord[], usage: Usage[], premium: PremiumData[]) {
+  return async (item: PlanItem): Promise<Batch | LinerError> => {
     try {
       const found = await searchWeb({
         key,
@@ -160,6 +150,21 @@ export async function gatherEvidence(
       return error;
     }
   };
+}
+
+export async function gatherEvidence(
+  claim: GatherClaim,
+  key: string,
+  budget: Budget,
+): Promise<{ bundle: EvidenceBundle; usage: Usage[] }> {
+  const usage: Usage[] = [];
+  const searches: SearchRecord[] = [];
+  const premium: PremiumData[] = [];
+  const keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery].filter(Boolean));
+  const relevanceOf = (text: string) => textRelevance(keywords, text);
+
+  // 검색 한 번. 실패해도 나머지 검색은 계속한다
+  const search = makeSearcher(key, budget, searches, usage, premium);
 
   // 1. 검색: 기본 2회, 반증 검색어가 있으면 1회 더
   const first = await Promise.all(searchPlan(claim).map(search));
@@ -252,7 +257,7 @@ export async function gatherEvidence(
       const query = site ? `site:${site} ${words}` : words;
       const squeeze = (s: string) => s.replace(/\s+/g, '');
       if (value.need_more && words && !searches.some((s) => squeeze(s.query) === squeeze(query))) {
-        const found = await search({ query, kind: '추가', maxResults: 8, includeKnowledge: false });
+        const found = await search({ query, kind: '추가', maxResults: LIMITS.gather.maxResults, includeKnowledge: false });
         if (!(found instanceof LinerError)) {
           extraSearch.done = true;
           const before = new Set(candidates.map((c) => c.url));
@@ -326,5 +331,205 @@ export async function gatherEvidence(
     extraSearch,
     premium: premium.slice(0, 3),
   };
+  return { bundle, usage };
+}
+
+/** 보강 검색에서 새로 적는 출처 수의 상한 */
+const MAX_FOLLOW_UP_SOURCES = 8;
+
+/**
+ * 보강 검색. 한 차례 판정해 '근거 부족'이 나온 명제에 대해, 모자랐던 근거를 겨냥해 한 번 더 찾는다.
+ * 앞서 모은 근거 묶음은 그대로 두고(번호도 그대로) 새로 찾은 출처와 발췌를 뒤에 붙여 돌려준다. 한 묶음에 한 번만 한다.
+ * @param missing 판정에서 무엇이 모자랐는지. 화면이 판정의 까닭과 권고에서 가져와 보낸다. 검색어를 정하는 데만 쓴다
+ */
+export async function gatherMore(
+  claim: GatherClaim,
+  previous: EvidenceBundle,
+  missing: string,
+  key: string,
+  budget: Budget,
+): Promise<{ bundle: EvidenceBundle; usage: Usage[] }> {
+  if (previous.followUp) return { bundle: previous, usage: [] };
+
+  const usage: Usage[] = [];
+  const searches: SearchRecord[] = [];
+  // 발췌를 고르는 낱말. 보강 검색어를 정한 뒤에는 그 검색어의 낱말도 더한다.
+  // 외국 기관의 공식 페이지처럼 한국어가 아닌 글은 명제의 낱말이 걸리지 않아, 검색어의 낱말이 없으면 관련 없는 페이지로 버려진다
+  let keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery].filter(Boolean));
+  const relevanceOf = (text: string) => textRelevance(keywords, text);
+  const search = makeSearcher(key, budget, searches, usage, []);
+
+  // 앞서 찾은 출처를 후보로 되살린다. 열지 않았던 것은 이번에 열 수 있다
+  const sourceByUrl = new Map(previous.sources.map((s) => [s.url, s]));
+  const known: Candidate[] = previous.sources.map((s, i) => ({
+    url: s.url,
+    title: s.title,
+    hostname: s.hostname,
+    date: s.date,
+    summary: s.summary,
+    foundBy: [...s.foundBy],
+    bestRank: i,
+    provisionalGrade: s.provisionalGrade,
+    publisherHint: s.publisherHint,
+    lowPlatform: s.lowPlatform,
+    skip: s.fetch.status === '열지 않음' ? s.fetch.reason : '',
+    relevance: relevanceOf(`${s.title} ${s.summary}`),
+  }));
+  const openedUrls = new Set(previous.sources.filter((s) => s.fetch.status !== '열지 않음').map((s) => s.url));
+  const hasExcerpt = new Set(previous.evidence.map((e) => e.sourceNo));
+
+  const followUp = { done: false, reason: '', added: 0 };
+  let candidates = known;
+  let fresh: Candidate[] = [];
+  let wanted = true;
+  try {
+    const sites = new Map<string, string>();
+    for (const i of STANDARD.domains.institutions) sites.set(i.domain, i.publisher);
+    for (const c of known) {
+      const host = c.hostname.replace(/^www\./, '');
+      if (c.provisionalGrade <= 2 && ![...sites.keys()].some((d) => hostMatches(host, d))) sites.set(host, c.publisherHint);
+    }
+    const clues: string[] = [];
+    for (const e of previous.evidence) {
+      for (const line of e.text.split('\n')) {
+        if (clues.length < 6 && line.length >= 6 && HOLDER_WORDS.test(line)) clues.push(line.slice(0, 110));
+      }
+    }
+    const { value, usage: used } = await chatJson<{ need_more: boolean; site: string; query: string; reason: string }>({
+      stage: '보강 검색 판단',
+      key,
+      system: FOLLOW_UP_SYSTEM,
+      user: followUpUserMessage({
+        statement: claim.statement,
+        type: claim.type,
+        asOf: claim.asOf,
+        need: STANDARD.requirements[claim.type]?.need ?? '',
+        missing: missing.trim().slice(0, LIMITS.followUp.missingChars),
+        queries: previous.searches.map((s) => s.query),
+        results: orderCandidates(known)
+          .slice(0, 12)
+          .map((c) => {
+            const source = sourceByUrl.get(c.url);
+            const status = source?.fetch.status ?? '열지 않음';
+            const outcome =
+              status === '성공'
+                ? source && hasExcerpt.has(source.no)
+                  ? '열어서 발췌를 실음'
+                  : '열었으나 찾는 내용이 없음'
+                : status === '관련 내용 없음'
+                  ? '열었으나 찾는 내용이 없음'
+                  : status === '실패'
+                    ? `열지 못함(${source?.fetch.reason ?? ''})`
+                    : c.skip
+                      ? `열지 않음(${c.skip})`
+                      : '열지 않음';
+            return { grade: c.provisionalGrade, hostname: c.hostname, title: c.title.slice(0, 80), summary: c.summary.slice(0, 120), outcome };
+          }),
+        sites: [...sites].map(([domain, publisher]) => ({ domain, publisher })),
+        clues,
+      }),
+      schemaName: 'more_search',
+      schema: MORE_SEARCH_SCHEMA,
+      maxTokens: LIMITS.gather.decideTokens,
+      budget,
+      routingStrategy: 'cost',
+    });
+    usage.push(used);
+    followUp.reason = (value.reason ?? '').trim().slice(0, 200);
+    wanted = Boolean(value.need_more);
+    const words = (value.query ?? '').replace(/site:\S+/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+    // 사이트는 후보에 있는 것만 받는다. 모델이 지어낸 도메인으로는 찾지 않는다
+    const site = [...sites.keys()].find((d) => d === (value.site ?? '').trim().toLowerCase().replace(/^www\./, '')) ?? '';
+    const query = site ? `site:${site} ${words}` : words;
+    const squeeze = (s: string) => s.replace(/\s+/g, '');
+    if (wanted && words && !previous.searches.some((s) => squeeze(s.query) === squeeze(query))) {
+      const found = await search({ query, kind: '보강', maxResults: LIMITS.gather.maxResults, includeKnowledge: false });
+      if (!(found instanceof LinerError)) {
+        keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery, words].filter(Boolean));
+        followUp.done = true;
+        const before = new Set(known.map((c) => c.url));
+        candidates = mergeResults([found], relevanceOf, known);
+        fresh = candidates.filter((c) => !before.has(c.url));
+      }
+    }
+  } catch (e) {
+    // 한 번 더 찾는 것은 덤이다. 실패해도 앞서 모은 근거는 그대로 돌려준다
+    followUp.reason = `보강 검색을 하지 못했다(${e instanceof LinerError ? e.kind : '오류'})`;
+    wanted = false;
+  }
+
+  // 새로 찾은 페이지를 먼저 열고, 자리가 남으면 앞서 찾아 두고 열지 않았던 잠정 2등급 이상의 페이지를 연다
+  const opened: OpenedPage[] = [];
+  const good = () => opened.filter((p) => p.outcome.status === '성공');
+  const open = async (picks: Candidate[]) => {
+    const room = Math.min(LIMITS.followUp.pages - good().length, LIMITS.followUp.attempts - opened.length);
+    const timeoutMs = Math.min(LIMITS.gather.pageTimeoutMs, budget.deadline - Date.now() - 1500);
+    const list = picks.slice(0, Math.max(0, room));
+    if (list.length === 0 || timeoutMs < 1500) return;
+    for (const c of list) openedUrls.add(c.url);
+    opened.push(...(await Promise.all(list.map((c) => openPage(c, timeoutMs, keywords)))));
+  };
+  if (wanted) {
+    const left = () => LIMITS.followUp.pages - good().length;
+    await open(pickPages(fresh, left(), openedUrls, false));
+    // 열지 못했거나 찾는 내용이 없던 자리는 다음 후보로 한 번 메운다
+    if (left() > 0) await open(pickPages(fresh, left(), openedUrls, false));
+    if (left() > 0) await open(pickPages(known.filter((c) => c.provisionalGrade <= 2), left(), openedUrls, false));
+  }
+
+  // 앞서 모은 출처와 발췌는 번호까지 그대로 두고, 새로 얻은 것을 뒤에 붙인다
+  const sources: SourceInfo[] = previous.sources.map((s) => ({ ...s }));
+  const evidence: Evidence[] = [...previous.evidence];
+  let nextSource = Math.max(0, ...sources.map((s) => s.no)) + 1;
+  let nextEvidence = Math.max(0, ...evidence.map((e) => e.no)) + 1;
+  const placeSource = (c: Candidate, outcome: FetchOutcome, pageDate: string | null): number => {
+    const old = sources.find((s) => s.url === c.url);
+    if (old) {
+      // 앞서 찾아 두고 열지 않았던 출처다. 번호는 그대로 두고 연 결과만 적는다
+      old.fetch = outcome;
+      old.pageDate = pageDate;
+      return old.no;
+    }
+    const no = nextSource;
+    nextSource += 1;
+    sources.push({
+      no,
+      url: c.url,
+      title: c.title,
+      hostname: c.hostname,
+      date: c.date,
+      pageDate,
+      summary: c.summary,
+      foundBy: c.foundBy,
+      provisionalGrade: c.provisionalGrade,
+      publisherHint: c.publisherHint,
+      lowPlatform: c.lowPlatform,
+      fetch: outcome,
+    });
+    return no;
+  };
+  const useful = good().sort((a, b) => a.candidate.provisionalGrade - b.candidate.provisionalGrade);
+  const perPage = Math.min(4000, Math.floor(LIMITS.followUp.excerptChars / Math.max(1, useful.length)));
+  let total = 0;
+  for (const page of useful) {
+    const sourceNo = placeSource(page.candidate, page.outcome, page.pageDate);
+    for (const text of pickExcerpts(page.blocks, keywords, perPage).excerpts) {
+      if (total + text.length > LIMITS.followUp.excerptChars) break;
+      evidence.push({ no: nextEvidence, sourceNo, text });
+      nextEvidence += 1;
+      total += text.length;
+      followUp.added += 1;
+    }
+  }
+  for (const page of opened.filter((p) => p.outcome.status !== '성공')) placeSource(page.candidate, page.outcome, page.pageDate);
+  let listed = 0;
+  for (const c of orderCandidates(fresh)) {
+    if (listed >= MAX_FOLLOW_UP_SOURCES) break;
+    if (openedUrls.has(c.url)) continue;
+    placeSource(c, { status: '열지 않음', reason: c.skip, chars: 0, truncated: false, fetchedAt: null }, null);
+    listed += 1;
+  }
+
+  const bundle: EvidenceBundle = { ...previous, searches: [...previous.searches, ...searches], sources, evidence, followUp };
   return { bundle, usage };
 }

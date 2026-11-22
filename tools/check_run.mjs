@@ -503,5 +503,83 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   expect("새로 고친 뒤에는 돌던 재검증을 '중단'으로 연다", reopened.rechecks[3].state, '중단');
 }
 
+// ---------- 10. 보강 검색: 판정이 '근거 부족'이면 한 번 더 찾는다 ----------
+console.log('\n[보강 검색]');
+{
+  // 문장 3: 박물관(한 번 더 찾으면 근거가 나온다), 문장 4: 탑(더 찾아도 없다), 문장 5: 종(처음부터 일치), 문장 6: 관람료(보강 검색이 실패한다)
+  // 문장 7에는 문장 3과 같은 명제가 다른 문장으로 한 번 더 나온다(근거를 함께 쓴다)
+  const text = '# 제목\n\n첫 문단입니다.\n\n박물관은 1996년에 문을 열었습니다. 탑은 보물입니다. 종은 국보입니다. 관람료는 없습니다.\n\n박물관은 1996년에 문을 열었다고들 합니다.\n';
+  const museum = '박물관은 1996년에 문을 열었다';
+  const api = makeApi({
+    claimsFor: (s) => {
+      if (s.includes('박물관')) return [{ statement: museum, type: '연대·인명·기관명' }];
+      if (s.includes('탑')) return [{ statement: '탑은 보물이다', type: '분류·지정' }];
+      if (s.includes('종은')) return [{ statement: '종은 국보다', type: '분류·지정' }];
+      if (s.includes('관람료')) return [{ statement: '관람료는 없다', type: '운영 정보' }];
+      return [];
+    },
+    // 박물관 명제는 보강 검색으로 근거가 실린 묶음을 받으면 판정이 난다
+    verdictFor: (st, body) => (st === '종은 국보다' ? '일치' : st === museum && body.bundle.followUp ? '불일치' : '근거 부족'),
+    moreFor: (st) => (st === museum ? 2 : 0),
+    fail: { gather: (body) => (body.more && body.statement === '관람료는 없다' ? FAIL('검색 오류(Liner 서버 오류)') : null) },
+  });
+  const store = makeStore();
+  const runner = createRunner(store, api);
+  runner.start(text);
+  await runner.idle();
+  const run = store.get();
+  const more = api.calls.gather.filter((g) => g.more);
+  expect('끝나면 상태는 끝남이고 실패한 명제가 없다', [run.status, countClaims(run).failed, countClaims(run).done], ['끝남', 0, 5]);
+  expect("판정이 '근거 부족'인 명제만 한 번 더 찾는다(일치는 찾지 않는다)", more.map((g) => g.statement).sort(), [museum, '관람료는 없다', '탑은 보물이다'].sort());
+  expect('같은 근거를 함께 쓰는 명제들은 보강 검색도 한 번만 한다', more.filter((g) => g.statement === museum).length, 1);
+  expect('앞서 모은 묶음과 서명, 판정에서 모자랐던 것을 함께 보낸다', [more[0].more.bundle.v, more[0].more.signature.startsWith('sig:'), more[0].more.missing], [1, true, '사유']);
+  expect('새 근거가 실리면 다시 판정한 결과를 쓴다', [view(store, 's3-c1').verdict, view(store, 's3-c1').bundle.evidence.length, view(store, 's3-c1').bundle.followUp.added], ['불일치', 3, 2]);
+  expect('  같은 근거를 쓰는 다른 문장의 명제도 새 묶음으로 판정된다', [view(store, 's7-c1').verdict, run.claims.find((e) => e.claim.id === 's7-c1').bundleFrom], ['불일치', 's3-c1']);
+  const judgedTower = api.calls.judge.filter((j) => j.claim.statement === '탑은 보물이다');
+  expect('새 근거가 없으면 다시 판정하지 않고 처음 판정을 둔다', [view(store, 's4-c1').verdict, judgedTower.length, view(store, 's4-c1').bundle.followUp.added], ['근거 부족', 1, 0]);
+  expect('보강 검색이 실패해도 처음 판정을 그대로 쓴다(실패로 남기지 않는다)', [view(store, 's6-c1').verdict, view(store, 's6-c1').state, view(store, 's6-c1').bundle.followUp], ['근거 부족', '완료', undefined]);
+  expect('일치한 명제에는 보강 검색의 기록이 없다', view(store, 's5-c1').bundle.followUp, undefined);
+  const searchKinds = view(store, 's3-c1').bundle.searches.map((s) => s.kind);
+  expect("보강 검색은 검색 기록에 '보강'으로 남는다", searchKinds.at(-1), '보강');
+  expect('보강 검색의 호출도 사용량에 더한다(처음 4회 x 2 + 보강 2회)', summarizeUsage(run.usage).searches, 10);
+
+  // 다시 판정이 실패하면 처음 판정을 그대로 둔다
+  const api2 = makeApi({
+    claimsFor: (s) => (s.includes('박물관') ? [{ statement: museum, type: '연대·인명·기관명' }] : []),
+    verdictFor: () => '근거 부족',
+    moreFor: () => 1,
+    fail: { judge: (body) => (body.bundle.followUp ? FAIL('모델 응답 오류(응답 잘림)') : null) },
+  });
+  const store2 = makeStore();
+  const runner2 = createRunner(store2, api2);
+  runner2.start('# 제목\n\n박물관은 1996년에 문을 열었습니다.\n');
+  await runner2.idle();
+  expect('다시 판정하지 못하면 처음 판정을 그대로 쓴다', [view(store2, 's2-c1').verdict, view(store2, 's2-c1').state, api2.calls.judge.length], ['근거 부족', '완료', 2]);
+  // 이미 끝난 명제는 다시 실행해도 보강 검색을 되풀이하지 않는다
+  const gathersBefore = api2.calls.gather.length;
+  runner2.resume();
+  await runner2.idle();
+  expect('끝난 명제는 다시 실행해도 또 찾지 않는다', api2.calls.gather.length, gathersBefore);
+
+  // 고쳐 쓴 문장의 재검증도 같은 절차를 따른다
+  const api3 = makeApi({
+    claimsFor: (s) => (s.includes('박물관') ? [{ statement: s.includes('1992') ? '박물관은 1992년에 문을 열었다' : museum, type: '연대·인명·기관명' }] : []),
+    verdictFor: (st, body) => (st.includes('1992') && body.bundle.followUp ? '일치' : '근거 부족'),
+    moreFor: (st) => (st.includes('1992') ? 1 : 0),
+  });
+  const store3 = makeStore();
+  const runner3 = createRunner(store3, api3);
+  runner3.start('# 제목\n\n박물관은 1996년에 문을 열었습니다.\n');
+  await runner3.idle();
+  store3.set((prev) => applyReview(prev, 2, { kind: 'save', text: '박물관은 1992년에 문을 열었습니다.' }, '2026-11-22T10:00:00.000Z').run);
+  const rechecker3 = createRechecker(store3, api3);
+  const before3 = api3.calls.gather.length;
+  await rechecker3.start(2);
+  const recheck = recheckOf(store3.get(), 2);
+  const sent3 = api3.calls.gather.slice(before3);
+  expect('재검증에서도 근거 부족이면 한 번 더 찾고 다시 판정한다', [recheck.state, viewOf(store3.get(), recheck.claims[0]).verdict, sent3.length, Boolean(sent3[1].more)], ['완료', '일치', 2, true]);
+  expect('  재검증 묶음에도 보강 검색의 기록이 남는다', recheck.claims[0].bundle.followUp.added, 1);
+}
+
 console.log(failed ? `\n실패 ${failed}건` : '\n모두 통과');
 process.exit(failed ? 1 : 0);

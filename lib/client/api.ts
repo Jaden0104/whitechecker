@@ -56,7 +56,8 @@ async function post<T>(path: string, body: unknown, code: string, signal: AbortS
 export function createApi(accessCode: () => string): RunApi {
   return {
     extract: (input, signal) => post('/api/extract', input, accessCode(), signal),
-    gather: (claim, signal) => post('/api/gather', { claim }, accessCode(), signal),
+    // 보강 검색이면 앞서 모은 묶음(more)을 명제와 따로 싣는다
+    gather: ({ more, ...claim }, signal) => post('/api/gather', more ? { claim, more } : { claim }, accessCode(), signal),
     judge: (body, signal) => post('/api/judge', body, accessCode(), signal),
     merge: (body, signal) => post('/api/merge', body, accessCode(), signal),
   };

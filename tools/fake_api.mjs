@@ -15,8 +15,9 @@ export function makeStore() {
  * calls에는 경로마다 받은 요청이 쌓인다.
  * @param reviseFor (문장, 고칠 내용) → { revised, edits, applied?, skipped? }. 주지 않으면 문장 끝에 '(고침)'을 붙인 수정안을 낸다
  * @param priorityFor (명제) → 편집 우선순위. 주지 않으면 첫 문단은 '상', 나머지는 '중'이다
+ * @param moreFor (명제) → 보강 검색(판정이 '근거 부족'일 때 한 번 더 찾기)이 새로 싣는 발췌의 수. 주지 않으면 0이다(새 자료를 찾지 못함)
  */
-export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () => NO_FIX, evidenceFor = () => 1, reviseFor = null, priorityFor = null, delay = 0, fail = {} }) {
+export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () => NO_FIX, evidenceFor = () => 1, reviseFor = null, priorityFor = null, moreFor = () => 0, delay = 0, fail = {} }) {
   const calls = { extract: [], gather: [], judge: [], merge: [] };
   const usage = (stage, model = 'claude-sonnet-5.5') => ({ stage, model, promptTokens: 100, completionTokens: 10, searchCalls: 0, seconds: 0.1 });
   const wait = async (signal) => {
@@ -56,6 +57,18 @@ export function makeApi({ claimsFor, verdictFor = () => '일치', fixFor = () =>
       if (await wait(signal)) return FAIL('중단', { aborted: true });
       const failure = failing('gather', body);
       if (failure) return failure;
+      if (body.more) {
+        // 보강 검색: 앞서 모은 묶음은 그대로 두고, moreFor가 정한 수만큼 발췌를 뒤에 붙여 돌려준다
+        const before = body.more.bundle;
+        const added = moreFor(body.statement);
+        const bundle = {
+          ...before,
+          searches: [...before.searches, { query: '보강 검색어', kind: '보강', dateRange: null, results: 3, error: null }],
+          evidence: [...before.evidence, ...Array.from({ length: added }, (_, i) => ({ no: before.evidence.length + i + 1, sourceNo: 1, text: '보강 발췌' }))],
+          followUp: { done: true, reason: '한 번 더 찾아보았다', added },
+        };
+        return { ok: true, bundle, signature: `sig:${body.statement}:more`, usage: [{ ...usage('근거 모으기', 'search/web'), promptTokens: 0, completionTokens: 0, searchCalls: 1 }] };
+      }
       const count = evidenceFor(body.statement);
       const bundle = {
         v: 1,

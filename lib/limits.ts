@@ -17,7 +17,11 @@ export const LIMITS = {
     pageTimeoutMs: 20_000,
     excerptChars: 8000,
     decideTokens: 300,
+    /** 검색 한 번에 받는 결과 수. Liner의 웹 검색은 건당 요금이라 결과를 더 받아도 값이 같다 */
+    maxResults: 10,
   },
+  /** 보강 검색: 판정이 '근거 부족'일 때 모자랐던 근거를 겨냥해 한 번 더 찾는다. 검색 1회, 새로 여는 페이지와 더 싣는 발췌의 상한 */
+  followUp: { pages: 3, attempts: 6, excerptChars: 4000, missingChars: 600 },
   judge: { outputTokens: 2000 },
   merge: { outputTokens: 1000 },
   /** 수정안의 다듬기 검사. 문장 하나를 다시 적는 정도다 */
