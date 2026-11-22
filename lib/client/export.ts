@@ -193,7 +193,7 @@ function factLines(view: ClaimView, index: number, outcome: string): string[] {
   if (!judgment) return lines;
   lines.push(`     - 까닭: ${judgment.reason}`);
   // 일치로 본 길이 평소와 다를 때의 표시(서로 다른 기관 두 곳, 단일 근거 등)도 기록에 남긴다
-  if (judgment.flags.length > 0) lines.push(`     - 표시: ${judgment.flags.join(', ')}`);
+  if (judgment.flags.length > 0) lines.push(`     - 주의 사항: ${judgment.flags.join(', ')}`);
   if (judgment.lowered) lines.push(`     - 판정을 바꾼 규칙: ${judgment.lowered.rule}(${judgment.lowered.note})`);
   if (judgment.fix.kind !== '없음') lines.push(`     - 고칠 내용(${judgment.fix.kind}): ${judgment.fix.instruction}`);
   if (judgment.action) lines.push(`     - 권고: ${judgment.action}`);
@@ -235,7 +235,7 @@ export function reviewRecordMarkdown(run: RunState, plan: ExportPlan, exportedAt
     if (adoptedHere && plan.unchecked.includes(sentence.id)) lines.push('- 편집자 수정 후 재검증하지 않음');
     const manual = plan.manual.find((m) => m.sentenceId === sentence.id);
     if (manual) lines.push(`- 원고에 자동으로 반영하지 않음: ${manual.why}`);
-    lines.push('- 확인한 사실');
+    lines.push('- 판정 대상');
     views.forEach((view, i) => lines.push(...factLines(view, i, outcomeOf(run, view))));
     // 고쳐 쓴 문장을 다시 검증한 결과. 채택한 글이 무엇을 근거로 확인됐는지 알 수 있게 근거와 출처까지 적는다
     const recheck = recheckOf(run, sentence.id);
@@ -280,7 +280,7 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
     판정: view.verdict,
     '편집 우선순위': view.judgment?.priority ?? null,
     까닭: view.judgment?.reason ?? (staysDirect(view) ? view.entry.claim.privateReason : ''),
-    표시: view.judgment?.flags ?? [],
+    '주의 사항': view.judgment?.flags ?? [],
     권고: view.judgment?.action ?? '',
     '고칠 내용': view.judgment && view.judgment.fix.kind !== '없음' ? { 종류: view.judgment.fix.kind, 내용: view.judgment.fix.instruction } : null,
     '판정을 바꾼 규칙': view.judgment?.lowered ?? null,
@@ -307,7 +307,7 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
         '원고에 반영': plan.applied.some((a) => a.sentenceId === sentence.id),
         '직접 반영할 까닭': plan.manual.find((m) => m.sentenceId === sentence.id)?.why ?? null,
         '선택한 때': review.at || null,
-        '확인한 사실': views.map(claimRecord),
+        '판정 대상': views.map(claimRecord),
         재검증:
           recheck && recheck.state === '완료'
             ? {

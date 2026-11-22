@@ -1,5 +1,5 @@
 // 직접 확인 목록(F9): 공개 자료로 확인할 수 없는 주장을 판정표와 따로 모아, 까닭과 권고를 한 줄씩 붙인다.
-// 판정표와 같이 한 줄이 문장 하나이고, 줄에는 원고 문장을 그대로 적는다. 무엇을 확인하려 했는지는 줄을 눌러 상세의 '확인한 사실'에서 본다.
+// 판정표와 같이 한 줄이 문장 하나이고, 줄에는 원고 문장을 그대로 적는다. 무엇을 확인하려 했는지는 줄을 눌러 상세의 '판정 대상'에서 본다.
 import type { ClaimView, RunState } from '@/lib/run/model';
 import { InlineText, StateBadge, VerdictBadge } from './bits';
 

@@ -147,7 +147,7 @@ expect('직접 반영할 항목, 직접 확인할 것, 미해결, 끝나지 않�
 const json = JSON.parse(JSON.stringify(reviewRecordJson(run, plan, '2026-11-21 19:00')));
 expect('JSON 기록의 요약이 같은 수를 적는다', json.요약, { '채택한 문장': 3, '원고에 반영한 문장': 2, '직접 반영할 항목': 1, '채택하지 않은 수정안': 2, '미해결로 남는 내용': plan.open.length, '직접 확인할 것': 1, '끝나지 않은 항목': 0 });
 const second = json['문장별 기록'].find((s) => s['문장 번호'] === 2);
-expect('JSON 기록에도 문장별로 선택과 사실, 근거를 담는다', [second.선택, second['편집자가 고쳐 씀'], second['편집자 수정 후 재검증하지 않음'], second['확인한 사실'].length, second['확인한 사실'][0].근거[0].출처.주소], ['채택', true, true, 2, 'https://www.example.go.kr/a']);
+expect('JSON 기록에도 문장별로 선택과 사실, 근거를 담는다', [second.선택, second['편집자가 고쳐 씀'], second['편집자 수정 후 재검증하지 않음'], second['판정 대상'].length, second['판정 대상'][0].근거[0].출처.주소], ['채택', true, true, 2, 'https://www.example.go.kr/a']);
 
 console.log('\n[파일 이름]');
 expect('제목에서 파일 이름에 쓸 수 없는 글자를 뺀다', fileBase('돌에 새긴 하늘: "천문도"/각석?'), '돌에 새긴 하늘 천문도 각석');

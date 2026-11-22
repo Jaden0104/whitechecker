@@ -185,7 +185,7 @@ ins { background: var(--ins-bg); color: var(--ins-ink); text-decoration: underli
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; }
 .kv dd small { color: var(--ink-3); font-size: inherit; }
-/* 확인한 사실: 판정이 무엇에 대한 것인지 그 카드의 첫 줄에 적는다. 원문과 수정안보다 눈에 띄지 않게 보통 크기로 둔다 */
+/* 판정 대상: 판정이 무엇에 대한 것인지 그 카드의 첫 줄에 적는다. 원문과 수정안보다 눈에 띄지 않게 보통 크기로 둔다 */
 .kv.fact-line { margin: 0 0 12px; padding-bottom: 11px; border-bottom: 1px solid var(--line); font-size: 15px; line-height: 1.6; }
 .ev { border-left: 3px solid var(--line-strong); padding: 2px 0 2px 12px; margin: 0 0 14px; }
 .ev:last-child { margin-bottom: 0; }

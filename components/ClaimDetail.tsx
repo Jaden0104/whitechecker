@@ -37,11 +37,12 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
   const which = siblings.length > 1 && nth >= 0 ? `확인한 사실 ${siblings.length}가지 가운데 ${ORDINALS[nth] ?? `${nth + 1}번째`}` : '';
   /**
    * 화이트체커가 실제로 확인한 글(명제). 문장의 지시어와 생략된 주어를 풀어 쓴 것이라 원문과 조금 다르다.
-   * 편집자가 다루는 것은 원문과 수정안이므로 크게 내세우지 않고, 판정이 무엇에 대한 것인지 알 수 있게 그 카드의 첫 줄에 적는다
+   * 편집자가 다루는 것은 원문과 수정안이므로 크게 내세우지 않고, 판정이 무엇에 대한 것인지 알 수 있게 그 카드의 첫 줄에 적는다.
+   * 이름은 '판정 대상'이다. '확인한 사실'이라고 적으면 확인을 마친 사실로 읽혀, 틀렸다고 판정한 글 위에서 뜻이 거꾸로 전해진다
    */
   const factLine = (
     <dl className="kv fact-line">
-      <dt>확인한 사실</dt>
+      <dt>판정 대상</dt>
       <dd>{claim.statement}</dd>
     </dl>
   );
@@ -155,7 +156,7 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
             )}
             {(judgment.flags.length > 0 || judgment.needChoice) && (
               <>
-                <dt>표시</dt>
+                <dt>주의 사항</dt>
                 <dd>
                   {[judgment.needChoice ? '선택 필요' : '', ...judgment.flags].filter(Boolean).join(' · ')}
                   {judgment.flags.includes(TWO_PUBLISHERS_FLAG) && (
