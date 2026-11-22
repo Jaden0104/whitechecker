@@ -1,7 +1,7 @@
 'use client';
 
 // 검증 화면의 뿌리. 진행은 lib/run의 runner가 맡고, 여기서는 그 상태를 그리고 브라우저에 저장한다.
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createApi } from '@/lib/client/api';
 import { clearRecords, loadAccessCode, loadRun, saveAccessCode, saveRun } from '@/lib/client/storage';
 import { compareRows, countClaims, entryOf, hasUnfinished, isAdopted, sentenceRows, staysDirect, viewOf, type RunState } from '@/lib/run/model';
@@ -65,6 +65,14 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
   const [panel, setPanel] = useState<'detail' | 'export'>('detail');
   const [selected, setSelected] = useState<string | null>(null);
   const [inDetail, setInDetail] = useState(false);
+  /** 오른쪽 칸(상세, 내보내기). 이 칸이 스스로 스크롤한다 */
+  const mainRef = useRef<HTMLElement>(null);
+
+  // 다른 항목을 고르거나 상세와 내보내기를 오가면 오른쪽 칸을 맨 위부터 보인다. 앞 항목에서 내려 둔 자리가 남으면 새 항목의 가운데부터 보이기 때문이다.
+  // 검증 결과가 들어오거나 채택을 눌러 다시 그릴 때는 고른 항목이 그대로이므로 자리를 건드리지 않는다
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [selected, panel]);
 
   // 남겨 둔 기록을 읽는다. 돌던 항목은 '중단'으로 표시된 채 열린다
   useEffect(() => {
@@ -311,7 +319,7 @@ export default function Workbench({ samples }: { samples: Sample[] }) {
               <DirectList run={run} views={directViews} selectedSentence={selectedSentence} onSelect={select} />
             )}
           </aside>
-          <main className="main">
+          <main className="main" ref={mainRef}>
             {panel === 'export' ? (
               <ExportPanel
                 run={run}
