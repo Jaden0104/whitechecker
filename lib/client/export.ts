@@ -48,13 +48,13 @@ export interface ExportPlan {
 
 /** 채택한 수정안을 자동으로 바꾸지 않는 까닭. 자동으로 바꿔도 되면 빈 문자열 */
 function manualReason(run: RunState, sentence: Sentence, after: string): string {
-  if (sentence.kind === 'table' || sentence.kind === 'caption' || sentence.kind === 'footnote') return '표, 캡션, 각주에 놓인 문장입니다';
-  if (sentence.hasLinkOrFootnote) return '링크나 각주가 든 문장입니다';
+  if (sentence.kind === 'table' || sentence.kind === 'caption' || sentence.kind === 'footnote') return '표, 캡션, 각주에 놓인 문장입니다.';
+  if (sentence.hasLinkOrFootnote) return '링크나 각주가 든 문장입니다.';
   const a = markupSignature(sentence.source);
   const b = markupSignature(after);
-  if (a.length !== b.length || a.some((mark, i) => mark !== b[i])) return '강조 표시가 원문과 달라진 수정안입니다';
+  if (a.length !== b.length || a.some((mark, i) => mark !== b[i])) return '강조 표시가 원문과 달라진 수정안입니다.';
   // 바꾸기 전에 그 위치의 글자가 기록해 둔 원문 문장과 같은지 본다
-  if (run.manuscript.slice(sentence.start, sentence.end) !== sentence.source) return '원고의 그 자리 글자가 기록해 둔 문장과 달라 바꾸지 않았습니다';
+  if (run.manuscript.slice(sentence.start, sentence.end) !== sentence.source) return '원고의 그 자리 글자가 기록해 둔 문장과 달라 바꾸지 않았습니다.';
   return '';
 }
 
@@ -243,7 +243,7 @@ export function reviewRecordMarkdown(run: RunState, plan: ExportPlan, exportedAt
       const stale = recheck.text !== review.edited;
       lines.push(`- 고쳐 쓴 문장을 다시 검증한 결과(${recheck.at.slice(0, 10)})${stale ? ' — 이전 문장에 대한 결과' : ''}`);
       if (stale) lines.push(`  - 검증한 글: ${recheck.text}`);
-      if (recheck.claims.length === 0) lines.push('  - 확인할 사실을 찾지 못했습니다');
+      if (recheck.claims.length === 0) lines.push('  - 확인할 사실을 찾지 못했습니다.');
       recheck.claims.forEach((e, i) => lines.push(...factLines(viewOf(run, e), i, '')));
     }
     lines.push('');

@@ -27,6 +27,8 @@ export function buildRevision(input: MergeInput, model: ModelMerge): SentenceRev
     sentence,
     model,
     fixes.map((f) => f.kind),
+    // 추측이나 전언임을 나타내는 말이 고친 대목에서 사라지는 수정은 받지 않는다
+    { hedges: STANDARD.hedges ?? [], instructions: fixes.map((f) => f.instruction) },
   );
   const idOf = (n: number) => fixes[n - 1].claimId;
   const appliedFixes = result.applied.map((n) => fixes[n - 1]);

@@ -409,25 +409,25 @@ export function recheckStatus(run: RunState, sentence: Sentence): RecheckStatus 
 export function factNote(run: RunState, view: ClaimView): { text: string; tone: 'ok' | 'warn' | '' } {
   const { id, sentenceId } = view.entry.claim;
   if (view.state !== '완료' || view.verdict === null) {
-    if (view.state === '실패') return { text: `처리하지 못했습니다(${view.failure || '사유를 알 수 없음'})`, tone: 'warn' };
-    return { text: view.state === '진행 중' ? '검증하는 중입니다' : '아직 처리가 끝나지 않았습니다', tone: '' };
+    if (view.state === '실패') return { text: `처리하지 못했습니다(${view.failure || '사유를 알 수 없음'}).`, tone: 'warn' };
+    return { text: view.state === '진행 중' ? '검증하는 중입니다.' : '아직 처리가 끝나지 않았습니다.', tone: '' };
   }
-  if (view.verdict === '일치') return { text: '고칠 것이 없습니다', tone: 'ok' };
+  if (view.verdict === '일치') return { text: '고칠 것이 없습니다.', tone: 'ok' };
   const sentence = run.sentences.find((s) => s.id === sentenceId);
   if (reviewOf(run, sentenceId).edited !== null) {
     return sentence && recheckStatus(run, sentence) === '현재 문장 검증 완료'
-      ? { text: '고쳐 쓴 문장을 다시 검증한 결과는 아래에 있습니다', tone: '' }
-      : { text: '고쳐 쓴 문장은 아직 다시 검증하지 않았습니다', tone: 'warn' };
+      ? { text: '고쳐 쓴 문장을 다시 검증한 결과는 아래에 있습니다.', tone: '' }
+      : { text: '고쳐 쓴 문장은 아직 다시 검증하지 않았습니다.', tone: 'warn' };
   }
   const entry = run.revisions[sentenceId];
   const revision = entry?.state === '완료' ? entry.revision : null;
-  if (revision?.revised && revision.applied.includes(id)) return { text: '수정안에 반영했습니다', tone: 'ok' };
-  if (view.verdict === '직접 확인') return { text: '공개 자료로 확인할 수 없어, 직접 확인이 필요합니다', tone: 'warn' };
+  if (revision?.revised && revision.applied.includes(id)) return { text: '수정안에 반영했습니다.', tone: 'ok' };
+  if (view.verdict === '직접 확인') return { text: '공개 자료로 확인할 수 없어, 직접 확인이 필요합니다.', tone: 'warn' };
   const skipped = revision?.skipped.find((s) => s.claimId === id);
-  if (skipped) return { text: `수정안에 넣지 못했습니다(${skipped.why})`, tone: 'warn' };
-  if (view.verdict === '근거 부족') return { text: '확인하지 못해 그대로 뒀습니다', tone: 'warn' };
+  if (skipped) return { text: `수정안에 넣지 못했습니다(${skipped.why}).`, tone: 'warn' };
+  if (view.verdict === '근거 부족') return { text: '확인하지 못해 그대로 뒀습니다.', tone: 'warn' };
   const hasFix = view.judgment !== null && view.judgment.fix.kind !== '없음';
-  return { text: hasFix ? '고칠 내용은 있지만 수정안에 넣지 못했습니다' : '고칠 방향을 하나로 정하지 못해 그대로 뒀습니다', tone: 'warn' };
+  return { text: hasFix ? '고칠 내용은 있지만 수정안에 넣지 못했습니다.' : '고칠 방향을 하나로 정하지 못해 그대로 뒀습니다.', tone: 'warn' };
 }
 
 /**

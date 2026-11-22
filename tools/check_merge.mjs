@@ -1,7 +1,7 @@
 // 수정안 합치기의 코드 쪽(PRD F7)이 기대대로 동작하는지 확인한다. Liner를 부르지 않는다.
 // 모델이 바꿀 대목을 이렇게 냈다고 치고, 코드가 문장을 어떻게 만들고 무엇을 알리는지를 본다.
 // 사용: node tools/check_merge.mjs
-import { acceptPolish, applyEdits, compareRevision, markupSignature, numbersIn, removalOnly, reviewRevision } from '../lib/merge/check.ts';
+import { HEDGE_LOST, acceptPolish, applyEdits, compareRevision, markupSignature, numbersIn, removalOnly, reviewRevision } from '../lib/merge/check.ts';
 import { citedSourceName, planMerge, unresolvedAfter } from '../lib/merge/plan.ts';
 import { settlePolish } from '../lib/merge/polish.ts';
 import { buildRevision, withPolish } from '../lib/merge/run.ts';
@@ -30,10 +30,10 @@ r = applyEdits(size, { edits: [{ claims: [1, 2], before: '세로 311cm, 가로 2
 expect('수정 하나로 합쳐 내도 둘 다 반영된 것으로 센다', `${r.revised}/${r.applied.join()}`, '돌의 크기는 세로 211cm, 가로 123cm입니다./1,2');
 
 r = applyEdits(size, { edits: [{ claims: [1], before: '세로 311 cm', after: '세로 211 cm' }], skipped: [] }, FIX1);
-expect('바꿀 대목이 원문에 글자 그대로 없으면 반영하지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/바꿀 대목이 원문에 글자 그대로 있지 않다');
+expect('바꿀 대목이 원문에 글자 그대로 없으면 반영하지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/원문에서 고칠 자리를 찾지 못했음');
 
 r = applyEdits(size, { edits: [{ claims: [1], before: 'cm', after: 'm' }], skipped: [] }, FIX1);
-expect('바꿀 대목이 두 번 나오면 반영하지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/바꿀 대목이 문장에 두 번 이상 나와 자리를 정할 수 없다');
+expect('바꿀 대목이 두 번 나오면 반영하지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/같은 말이 문장에 여러 번 나와 고칠 자리를 정하지 못했음');
 
 r = applyEdits(size, { edits: [{ claims: [1], before: '세로 311cm, 가로', after: '세로 211cm, 가로' }, { claims: [2], before: '가로 223cm', after: '가로 123cm' }], skipped: [] }, FIX2);
 expect('수정끼리 대목이 겹치면 어느 쪽도 반영하지 않는다', `${r.revised}/${r.skipped.map((s) => s.claim).join()}`, 'null/1,2');
@@ -41,11 +41,11 @@ expect('수정끼리 대목이 겹치면 어느 쪽도 반영하지 않는다', 
 r = applyEdits(size, { edits: [{ claims: [1], before: '세로 311cm', after: '세로 211cm' }], skipped: [{ claim: 2, why: '무엇으로 바꿀지 적혀 있지 않다' }] }, [...FIX2, '교정안']);
 expect('반영하지 못한 것은 까닭과 함께 남는다', r.skipped, [
   { claim: 2, why: '무엇으로 바꿀지 적혀 있지 않다' },
-  { claim: 3, why: '모델이 반영하지 않았다' },
+  { claim: 3, why: '고칠 방법을 찾지 못했음' },
 ]);
 
 r = applyEdits(size, { edits: [{ claims: [9], before: '세로 311cm', after: '세로 211cm' }], skipped: [] }, FIX1);
-expect('없는 번호를 댄 수정은 받지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/모델이 반영하지 않았다');
+expect('없는 번호를 댄 수정은 받지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/고칠 방법을 찾지 못했음');
 
 r = applyEdits(size, { edits: [{ claims: [1], before: '세로 311cm', after: '세로 211cm\n(고침)' }], skipped: [] }, FIX1);
 expect('바꿔 넣을 글에 줄바꿈이 있으면 받지 않는다', r.revised, null);
@@ -57,7 +57,7 @@ expect('대목을 빼는 수정은 받는다', r.revised, '이 각석은 석각 
 r = applyEdits(most, { edits: [{ claims: [1], before: '세계에서 가장', after: '' }], skipped: [] }, ['축소안']);
 expect('  빼면서 생긴 겹친 공백은 정리한다', r.revised, '이 각석은 오래된 석각 천문도입니다.');
 r = applyEdits(most, { edits: [{ claims: [1], before: '세계에서 가장 오래된 석각 천문도입니다', after: '세계에서도 손꼽히는 오래된 천문도입니다' }], skipped: [] }, ['축소안']);
-expect('다른 표현으로 바꿔 넣은 축소안은 받지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/축소안인데 원문에 없던 말을 넣었다');
+expect('다른 표현으로 바꿔 넣은 축소안은 받지 않는다', `${r.revised}/${r.skipped[0].why}`, 'null/빼기만 해야 하는 수정인데 원문에 없던 말이 들어감');
 const quote = '조선의 한 학자는 이 천문도를 두고 "하늘의 뜻을 돌에 옮긴 것"이라고 썼습니다.';
 r = applyEdits(quote, { edits: [{ claims: [1], before: quote, after: '이 천문도는 조선 초에 돌에 새겨 만들었습니다.' }], skipped: [] }, ['축소안']);
 expect('문장을 통째로 새로 쓴 축소안은 받지 않는다', r.revised, null);
@@ -208,6 +208,47 @@ let polishedRev = withPolish(hoursInput, rev, mended, { state: '다듬음', prob
 expect('다듬은 문장으로 수정안을 바꾸고 달라진 것을 다시 뽑는다', `${polishedRev.revised === mended}/${polishedRev.polish.state}/${polishedRev.changes.wordsAdded.includes('열고')}`, 'true/다듬음/true');
 polishedRev = withPolish(hoursInput, rev, broken, { state: '다듬지 못함', problem: '이어지지 않는다', draft: null });
 expect('다듬지 못했으면 어색할 수 있다고 알린다', polishedRev.cautions.some((c) => c.startsWith('문장이 어색할 수 있다')), true);
+
+console.log('\n[추측하는 말이 사라지는 수정]');
+{
+  const guess = '당시 300명쯤 모였을 것으로 추정됩니다.';
+  const guard = (instructions) => ({ hedges: ['추정', '추측', '것으로 보', '알려져', '라고 한다'], instructions });
+  const dropNumber = ["'300명쯤'이라는 인원을 뺀다"];
+  const swapNumber = ["'300명'을 '500명'으로 고친다"];
+  let g = applyEdits(guess, { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '모였습니다.' }], skipped: [] }, ['축소안'], guard(dropNumber));
+  expect('수치를 빼다가 추측하는 말까지 지운 수정은 받지 않는다', `${g.revised}/${g.skipped[0].why}`, `null/${HEDGE_LOST}`);
+  g = applyEdits(guess, { edits: [{ claims: [1], before: '300명쯤 ', after: '' }], skipped: [] }, ['축소안'], guard(dropNumber));
+  expect('수치만 빼고 추측하는 말을 남긴 수정은 받는다', g.revised, '당시 모였을 것으로 추정됩니다.');
+  g = applyEdits(guess, { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '500명쯤 모였을 것으로 추정됩니다.' }], skipped: [] }, ['교정안'], guard(swapNumber));
+  expect('값을 바꾸면서 추측하는 말을 그대로 둔 수정은 받는다', g.revised, '당시 500명쯤 모였을 것으로 추정됩니다.');
+  g = applyEdits(guess, { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '500명쯤 모였습니다.' }], skipped: [] }, ['교정안'], guard(swapNumber));
+  expect('값을 바꾸면서 추측하는 말을 지운 수정도 받지 않는다', `${g.revised}/${g.skipped[0].why}`, `null/${HEDGE_LOST}`);
+  g = applyEdits(guess, { edits: [{ claims: [1], before: '모였을 것으로 추정됩니다.', after: '모였을 것으로 보입니다.' }], skipped: [] }, ['교정안'], guard(['표현을 고친다']));
+  expect('추측하는 말이 다른 꼴로 남아 있으면 받는다', g.revised, '당시 300명쯤 모였을 것으로 보입니다.');
+  g = applyEdits(
+    guess,
+    { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '300명이 모였습니다.' }], skipped: [] },
+    ['교정안'],
+    guard(["'300명쯤 모였을 것으로 추정됩니다'를 '300명이 모였습니다'로 고친다(주최 쪽이 센 수)"]),
+  );
+  expect('고칠 내용이 그 말을 직접 다루면 따른다', g.revised, '당시 300명이 모였습니다.');
+  const hearsay = '이 종은 신라 때 만든 것으로 알려져 있습니다.';
+  g = applyEdits(hearsay, { edits: [{ claims: [1], before: hearsay, after: '국립경주박물관에 따르면 이 종은 신라 때 만들었습니다.' }], skipped: [] }, ['인용형'], guard(['이 출처의 설명임을 밝혀 쓴다']));
+  expect('출처를 밝히는 인용형에서는 흐리는 말이 빠져도 받는다', g.revised, '국립경주박물관에 따르면 이 종은 신라 때 만들었습니다.');
+  g = applyEdits(guess, { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '모였습니다.' }], skipped: [] }, ['축소안']);
+  expect('추측하는 말의 목록을 주지 않으면 이 검사는 하지 않는다', g.revised, '당시 모였습니다.');
+  // 수정안을 만들 때는 검증 기준 파일의 목록으로 이 검사를 한다
+  const built = buildRevision(
+    { sentence: guess, fixes: [fix('a', '축소안', dropNumber[0])] },
+    { edits: [{ claims: [1], before: '300명쯤 모였을 것으로 추정됩니다.', after: '모였습니다.' }], skipped: [] },
+  );
+  expect('수정안을 만들 때 이 검사가 걸린다(수정안은 없고 까닭이 남는다)', `${built.revised}/${built.skipped[0]?.why}`, `null/${HEDGE_LOST}`);
+  const polite = buildRevision(
+    { sentence: '이 탑은 고려 초에 세운 것으로 보입니다.', fixes: [fix('a', '축소안', "'고려 초에'를 뺀다")] },
+    { edits: [{ claims: [1], before: '고려 초에 세운 것으로 보입니다.', after: '세웠습니다.' }], skipped: [] },
+  );
+  expect('존댓말 꼴("보입니다")의 추측도 잡는다', `${polite.revised}/${polite.skipped[0]?.why}`, `null/${HEDGE_LOST}`);
+}
 
 console.log(failed ? `\n실패 ${failed}건` : '\n모두 통과');
 process.exit(failed ? 1 : 0);

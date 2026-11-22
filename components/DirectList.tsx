@@ -59,8 +59,9 @@ export function DirectList({ run, views, selectedSentence, onSelect }: Props) {
                   문장 {sentenceId} · 공개 자료로 확인할 수 없는 까닭: {reasons.join(' / ')}
                 </div>
                 <div className="meta">
-                  {waiting ? '공개 자료가 있는지 한 번 찾아본 뒤에 확정합니다' : '권고: 당사자나 내부 자료로 직접 확인한다'}
-                  {notes.length > 0 ? ` · ${notes.join(' ')}` : ''}
+                  {waiting ? '공개 자료가 있는지 한 번 찾아본 뒤에 확정합니다.' : '권고: 당사자나 내부 자료로 직접 확인한다'}
+                  {/* 앞의 글이 마침표로 끝나면 가운뎃점 없이 잇는다 */}
+                  {notes.length > 0 ? `${waiting ? ' ' : ' · '}${notes.join(' ')}` : ''}
                 </div>
               </button>
             </li>

@@ -30,6 +30,22 @@ export interface AppliedEdits {
 const MAX_AFTER_CHARS = 1200;
 /** 축소안에서 조사를 맞추느라 새로 들어갈 수 있는 글자 수 */
 const REMOVAL_SLACK_CHARS = 2;
+/**
+ * 고칠 내용을 반영하지 못했는데 까닭이 따로 없을 때 적는 말.
+ * 반영하지 못한 까닭은 화면의 안내문에 괄호로 들어간다("생성된 수정안에 문제가 있어 보여 드리지 않습니다(까닭)").
+ * 그래서 편집자가 읽을 말로, '~음'으로 끝나게 적는다
+ */
+const NO_WAY_FOUND = '고칠 방법을 찾지 못했음';
+/** 추측이나 전언임을 나타내는 말이 고친 대목에서 사라졌을 때 적는 말 */
+export const HEDGE_LOST = '추측하는 말이 빠져 단정하는 문장이 됨';
+
+/** 수정을 받아들일지 볼 때 함께 보는 것 */
+export interface EditGuard {
+  /** 추측이나 전해 들은 말임을 나타내는 말(검증 기준 파일의 hedges) */
+  hedges: string[];
+  /** 고칠 내용의 글. 순서는 고칠 내용의 번호와 같다 */
+  instructions: string[];
+}
 
 /** 두 글에 순서대로 함께 들어 있는 글자의 수(가장 긴 공통 부분열의 길이) */
 function commonLength(a: string, b: string): number {
@@ -58,10 +74,12 @@ export function removalOnly(before: string, after: string): boolean {
  * - 바꿀 대목은 원문에 글자 그대로, 한 번만 나와야 한다. 아니면 그 수정은 반영하지 않는다
  * - 축소안만 반영하는 수정은 빼기만 해야 한다. 새 말을 넣었으면 반영하지 않는다
  * - 수정끼리 대목이 겹치면 어느 쪽도 반영하지 않는다
+ * - 추측이나 전언임을 나타내는 말이 고친 대목에서 사라지면 반영하지 않는다(guard를 줬을 때)
  * - 반영하지 못한 고칠 내용은 까닭과 함께 돌려준다
  * @param kinds 고칠 내용의 종류. 순서는 고칠 내용의 번호와 같다
+ * @param guard 추측하는 말의 목록과 고칠 내용의 글. 주지 않으면 그 검사는 하지 않는다
  */
-export function applyEdits(source: string, model: ModelMerge, kinds: string[]): AppliedEdits {
+export function applyEdits(source: string, model: ModelMerge, kinds: string[], guard?: EditGuard): AppliedEdits {
   const fixCount = kinds.length;
   const valid = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= fixCount;
   const why = new Map<number, string>();
@@ -77,29 +95,42 @@ export function applyEdits(source: string, model: ModelMerge, kinds: string[]): 
     const before = typeof edit.before === 'string' ? edit.before : '';
     const after = typeof edit.after === 'string' ? edit.after : '';
     if (!before) {
-      skip(claims, '바꿀 대목이 비어 있다');
+      skip(claims, '고칠 자리를 정하지 못했음');
       continue;
     }
     if (before === after) {
-      skip(claims, '바꾼 것이 없다');
+      skip(claims, '원문과 달라진 것이 없음');
       continue;
     }
     if (/[\r\n]/.test(after) || after.length > MAX_AFTER_CHARS) {
-      skip(claims, '바꿔 넣을 글이 한 줄이 아니거나 너무 길다');
+      skip(claims, '바꿔 넣을 글이 너무 길거나 여러 줄로 나뉨');
       continue;
     }
     const start = source.indexOf(before);
     if (start < 0) {
-      skip(claims, '바꿀 대목이 원문에 글자 그대로 있지 않다');
+      skip(claims, '원문에서 고칠 자리를 찾지 못했음');
       continue;
     }
     if (source.indexOf(before, start + 1) >= 0) {
-      skip(claims, '바꿀 대목이 문장에 두 번 이상 나와 자리를 정할 수 없다');
+      skip(claims, '같은 말이 문장에 여러 번 나와 고칠 자리를 정하지 못했음');
       continue;
     }
     if (claims.every((c) => kinds[c - 1] === '축소안') && !removalOnly(before, after)) {
-      skip(claims, '축소안인데 원문에 없던 말을 넣었다');
+      skip(claims, '빼기만 해야 하는 수정인데 원문에 없던 말이 들어감');
       continue;
+    }
+    // 추측이나 전언임을 나타내는 말이 고친 대목에서 사라지면 받지 않는다. 수치나 이름을 빼다가 문장의 끝맺음까지 지우면
+    // 추측이 단정으로 바뀐다("50~100부쯤 찍었을 것으로 추측됩니다." → "찍었습니다.").
+    // 다른 꼴로라도 남아 있으면 받는다("추정된다" → "추정됩니다"). 출처를 밝히는 인용형은 흐리는 말 대신 출처의 이름을 넣는 것이므로 보지 않고,
+    // 고칠 내용이 그 말을 직접 다루면(그 말이 고칠 내용에 적혀 있으면) 그대로 따른다
+    if (guard && !claims.some((c) => kinds[c - 1] === '인용형')) {
+      const had = guard.hedges.filter((h) => h && before.includes(h));
+      const kept = guard.hedges.some((h) => h && after.includes(h));
+      const asked = had.some((h) => claims.some((c) => (guard.instructions[c - 1] ?? '').includes(h)));
+      if (had.length > 0 && !kept && !asked) {
+        skip(claims, HEDGE_LOST);
+        continue;
+      }
     }
     placed.push({ start, end: start + before.length, before, after, claims });
   }
@@ -114,7 +145,7 @@ export function applyEdits(source: string, model: ModelMerge, kinds: string[]): 
       }
     }
   }
-  for (const p of clashed) skip(p.claims, '다른 수정과 대목이 겹친다');
+  for (const p of clashed) skip(p.claims, '다른 고칠 내용과 고칠 자리가 겹침');
 
   // 뒤에서부터 바꿔야 앞쪽 수정의 위치가 밀리지 않는다
   const usable = placed.filter((p) => !clashed.has(p)).sort((a, b) => b.start - a.start);
@@ -128,10 +159,10 @@ export function applyEdits(source: string, model: ModelMerge, kinds: string[]): 
   for (const c of applied) why.delete(c);
   for (const s of Array.isArray(model?.skipped) ? model.skipped : []) {
     if (valid(s?.claim) && !applied.includes(s.claim) && !why.has(s.claim)) {
-      why.set(s.claim, (typeof s.why === 'string' ? s.why.trim().slice(0, 120) : '') || '모델이 반영하지 않았다');
+      why.set(s.claim, (typeof s.why === 'string' ? s.why.trim().slice(0, 120) : '') || NO_WAY_FOUND);
     }
   }
-  for (let c = 1; c <= fixCount; c += 1) if (!applied.includes(c) && !why.has(c)) why.set(c, '모델이 반영하지 않았다');
+  for (let c = 1; c <= fixCount; c += 1) if (!applied.includes(c) && !why.has(c)) why.set(c, NO_WAY_FOUND);
 
   return {
     revised: changed ? revised : null,

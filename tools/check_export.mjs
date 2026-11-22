@@ -87,11 +87,11 @@ expect('원고에 반영한 문장을 알려 준다', plan.applied.map((a) => a.
 
 console.log('\n[직접 반영할 항목]');
 plan = planExport(adopt(base, 4));
-expect('링크가 든 문장은 자동으로 바뀌지 않고 직접 반영할 항목에 나온다', [plan.manuscript === TEXT, plan.manual.map((m) => `${m.sentenceId}:${m.why}`)], [true, ['4:링크나 각주가 든 문장입니다']]);
+expect('링크가 든 문장은 자동으로 바뀌지 않고 직접 반영할 항목에 나온다', [plan.manuscript === TEXT, plan.manual.map((m) => `${m.sentenceId}:${m.why}`)], [true, ['4:링크나 각주가 든 문장입니다.']]);
 
 let run = act(base, 6, { kind: 'save', text: '지금은 서울의 국립고궁박물관에 있습니다.' });
 plan = planExport(adopt(run, 6));
-expect('강조 표시가 달라진 수정안도 직접 반영할 항목으로 돌린다', [plan.manuscript === TEXT, plan.manual.map((m) => m.why)], [true, ['강조 표시가 원문과 달라진 수정안입니다']]);
+expect('강조 표시가 달라진 수정안도 직접 반영할 항목으로 돌린다', [plan.manuscript === TEXT, plan.manual.map((m) => m.why)], [true, ['강조 표시가 원문과 달라진 수정안입니다.']]);
 
 const shifted = { ...base, sentences: base.sentences.map((s) => (s.id === 2 ? { ...s, start: s.start + 1, end: s.end + 1 } : s)) };
 plan = planExport(adopt(shifted, 2));
@@ -142,7 +142,7 @@ expect('문장마다 고치기 전과 고친 뒤, 선택을 적는다', [has('##
 expect("고쳐 쓴 뒤 다시 검증하지 않고 채택한 문장에는 그렇게 적는다", has('- 편집자 수정 후 재검증하지 않음'), true);
 expect('사실마다 판정, 까닭, 근거의 인용문과 주소, 출처 등급, 확인일을 적는다', [has('  1. [불일치] 각석의 크기는 세로 311cm입니다. → 미해결'), has('     - 까닭: 사유'), has('     - 근거 1(반박): "발췌"'), has('       출처 1: 어느 기관, 1등급, 기관의 공식 안내, https://www.example.go.kr/a'), has('     - 확인일: 2026-11-21')], [true, true, true, true, true]);
 expect('채택한 수정안이 고친 명제에는 반영했다고 적는다', has('[불일치] 각석은 세계에서 가장 오래된 천문도입니다. → 채택한 수정안에 반영'), true);
-expect('직접 반영할 항목, 직접 확인할 것, 미해결, 끝나지 않은 항목을 붙인다', [has('## 직접 반영할 항목\n\n- 문장 4: 링크나 각주가 든 문장입니다'), has('## 직접 확인할 것\n\n- 문장 8: 구독자는 3만 명입니다.'), has('## 미해결로 남는 내용\n\n- 문장 2 [불일치]'), has('## 끝나지 않은 항목\n\n없음')], [true, true, true, true]);
+expect('직접 반영할 항목, 직접 확인할 것, 미해결, 끝나지 않은 항목을 붙인다', [has('## 직접 반영할 항목\n\n- 문장 4: 링크나 각주가 든 문장입니다.'), has('## 직접 확인할 것\n\n- 문장 8: 구독자는 3만 명입니다.'), has('## 미해결로 남는 내용\n\n- 문장 2 [불일치]'), has('## 끝나지 않은 항목\n\n없음')], [true, true, true, true]);
 
 const json = JSON.parse(JSON.stringify(reviewRecordJson(run, plan, '2026-11-21 19:00')));
 expect('JSON 기록의 요약이 같은 수를 적는다', json.요약, { '채택한 문장': 3, '원고에 반영한 문장': 2, '직접 반영할 항목': 1, '채택하지 않은 수정안': 2, '미해결로 남는 내용': plan.open.length, '직접 확인할 것': 1, '끝나지 않은 항목': 0 });

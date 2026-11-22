@@ -60,7 +60,7 @@ export function StartScreen({ code, onCode, draft, onDraft, samples, error, onEr
 
         <div className="field">
           <label htmlFor="access-code">
-            접속 코드<span className="hint">심사와 시연을 위해 받은 코드를 넣습니다</span>
+            접속 코드<span className="hint">심사와 시연을 위해 받은 코드를 넣습니다.</span>
           </label>
           <input
             id="access-code"
@@ -75,7 +75,7 @@ export function StartScreen({ code, onCode, draft, onDraft, samples, error, onEr
 
         <div className="field">
           <label htmlFor="manuscript">
-            원고<span className="hint">붙여 넣거나 .md, .txt 파일을 올립니다</span>
+            원고<span className="hint">붙여 넣거나 .md, .txt 파일을 올립니다.</span>
           </label>
           <textarea
             id="manuscript"

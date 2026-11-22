@@ -165,7 +165,7 @@ export function SentenceCard({ run, sentence, currentId, running, onSelect, onRe
       notes.push({ text: `수정안을 만들지 못했습니다${entry.failure ? `(${entry.failure})` : ''}. '이어서 실행'으로 다시 만들 수 있습니다.`, tone: 'warn' });
     } else if (entry?.state === '완료' && entry.revision) {
       const why = entry.revision.skipped[0]?.why;
-      notes.push({ text: `만든 수정안이 검사에서 걸러졌습니다${why ? `(${why})` : ''}. 아래 '고칠 내용'을 보고 직접 고쳐 쓸 수 있습니다.`, tone: 'warn' });
+      notes.push({ text: `생성된 수정안에 문제가 있어 보여 드리지 않습니다${why ? `(${why})` : ''}. 아래 '고칠 내용'을 보고 직접 고쳐 쓸 수 있습니다.`, tone: 'warn' });
     } else if (entry?.state === '없음') {
       if (mine.every((v) => v.verdict === '일치')) notes.push({ text: '고칠 내용이 없습니다.' });
       else if (mine.every((v) => v.verdict === '직접 확인' || v.verdict === '일치')) notes.push({ text: '공개 자료로 확인할 수 없는 문장이라 수정안을 만들지 않았습니다.' });
@@ -362,7 +362,7 @@ export function SentenceCard({ run, sentence, currentId, running, onSelect, onRe
                   type="button"
                   className="btn"
                   disabled={running || recheckingNow}
-                  title={running ? '검증이 끝난 뒤에 쓸 수 있습니다' : undefined}
+                  title={running ? '검증이 끝난 뒤에 쓸 수 있습니다.' : undefined}
                   onClick={() => {
                     setNotice('');
                     onRecheck(sentence.id);

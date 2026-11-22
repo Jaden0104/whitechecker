@@ -316,7 +316,7 @@ console.log('\n[문장 단위로 보기]');
   const order = [...rows].filter((r) => !r.allOk).sort(compareRows);
   expect('줄의 자리는 가장 급한 명제를 따른다', order.map((r) => r.sentence.id), [3, 4]);
   expect('수정안은 세로만 고친다(가로는 근거 부족이라 그대로)', run.revisions[3].revision.revised, '크기는 세로 211cm, 가로 223cm입니다.');
-  expect('사실마다 수정안에서 어떻게 됐는지 적는다', [factNote(run, row(3).views[0]).text, factNote(run, row(3).views[1]).text, factNote(run, row(4).views[0]).text], ['수정안에 반영했습니다', '확인하지 못해 그대로 뒀습니다', '고칠 것이 없습니다']);
+  expect('사실마다 수정안에서 어떻게 됐는지 적는다', [factNote(run, row(3).views[0]).text, factNote(run, row(3).views[1]).text, factNote(run, row(4).views[0]).text], ['수정안에 반영했습니다.', '확인하지 못해 그대로 뒀습니다.', '고칠 것이 없습니다.']);
 }
 
 // ---------- 판정표의 순서(F8) ----------

@@ -39,7 +39,10 @@ export interface Standard {
   documentTypes: Array<{ id: string; grade: Grade; gradeOutsideRole?: Grade; notEvidence?: boolean; about: string; role?: string }>;
   requirements: Record<ClaimType, Requirement>;
   qualifiers: string[];
-  /** 출처를 밝히지 않고 흐리는 말. 수정안에 이런 말이 새로 들어가면 알린다 */
+  /**
+   * 출처를 밝히지 않고 흐리는 말, 추측이나 전해 들은 말임을 나타내는 말. 존댓말 꼴("추정됩니다", "보입니다")도 걸리게 줄기만 적는다.
+   * 수정안에 이런 말이 새로 들어가면 알리고, 원문에 있던 것이 고친 대목에서 사라지면 그 수정을 반영하지 않는다(lib/merge/check.ts)
+   */
   hedges: string[];
   /** 판정 지침. 판정 지시문에 그대로 들어간다 */
   judgeGuidelines: string[];
