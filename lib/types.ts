@@ -123,7 +123,10 @@ export interface Evidence {
   text: string;
 }
 
-/** Liner 검색이 함께 돌려준 데이터(Premium Data). 오지 않는 질의가 많다 */
+/**
+ * Liner 검색이 함께 돌려주는 데이터(Premium Data). 지금은 받지 않는다(문화·교양 글의 질의에는 오지 않았다).
+ * 그래서 근거 묶음의 premium은 늘 비어 있다. 앞서 저장한 묶음과 서명의 모양을 지키려고 항목은 남겨 둔다
+ */
 export interface PremiumData {
   title: string;
   description: string;

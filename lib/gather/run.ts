@@ -67,8 +67,9 @@ function searchPlan(claim: GatherClaim): PlanItem[] {
     maxResults: LIMITS.gather.maxResults,
     // 검색 가운데 한 번은 최근 1년으로 좁혀 바뀐 내용을 찾는다
     dateRange: recent && i === 1 ? 'past_year' : undefined,
-    // Premium Data는 수치·통계 유형에서만 받는다
-    includeKnowledge: claim.type === '수치·통계' && i === 0,
+    // Premium Data는 받지 않는다(2026-11-22). 인구나 물가 같은 거시 통계의 질의에만 오고, 문화·교양 글의 질의에는 오지 않았다
+    // (개발용 원고의 수치·통계 검색 13회에서 0건). 받은 것을 판정에 쓰지도 않았다. 받지 않으면 검색 단가도 절반이다
+    includeKnowledge: false,
   }));
   if (claim.counterQuery.trim()) {
     plan.push({ query: claim.counterQuery.trim(), kind: '반증', maxResults: LIMITS.gather.maxResults, includeKnowledge: false });
