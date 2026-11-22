@@ -50,6 +50,47 @@ function textOf(node: HtmlNode): string {
   return (node.childNodes ?? []).map(textOf).join('');
 }
 
+export interface PageLink {
+  url: string;
+  /** 링크에 적힌 글자(메뉴의 이름 등) */
+  text: string;
+}
+
+/**
+ * 페이지 안의 링크와 거기 적힌 글자를 뽑는다. 주소는 그 페이지의 주소를 기준으로 온전한 꼴로 바꾼다.
+ * 본문 글을 뽑을 때는 메뉴를 빼지만, 여기서는 메뉴의 링크도 싣는다. 기관 사이트에서 연혁이나 관람 안내 같은
+ * 안쪽 페이지를 찾을 때는 메뉴가 길잡이이기 때문이다. 스크립트로만 움직이는 링크(href="#", javascript:)는 뽑지 않는다
+ */
+export function extractLinks(html: string, baseUrl: string): PageLink[] {
+  const doc = parse(html) as unknown as HtmlNode;
+  const out: PageLink[] = [];
+  const seen = new Set<string>();
+  const walk = (node: HtmlNode) => {
+    const name = node.nodeName;
+    if (name === 'script' || name === 'style' || name === 'template' || name === 'noscript') return;
+    if (name === 'a') {
+      const href = (attr(node, 'href') ?? '').trim();
+      const text = (textOf(node).replace(/\s+/g, ' ').trim() || (attr(node, 'title') ?? '').replace(/\s+/g, ' ').trim()).slice(0, 80);
+      if (href && text && !href.startsWith('#')) {
+        try {
+          const url = new URL(href, baseUrl);
+          url.hash = '';
+          if ((url.protocol === 'http:' || url.protocol === 'https:') && !seen.has(url.href)) {
+            seen.add(url.href);
+            out.push({ url: url.href, text });
+          }
+        } catch {
+          // 주소로 읽을 수 없는 링크는 건너뛴다
+        }
+      }
+    }
+    for (const child of node.childNodes ?? []) walk(child);
+    if (node.content) walk(node.content);
+  };
+  walk(doc);
+  return out;
+}
+
 export function extractPageText(html: string): PageText {
   const doc = parse(html) as unknown as HtmlNode;
   const lines: string[] = [];

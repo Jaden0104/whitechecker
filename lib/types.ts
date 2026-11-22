@@ -145,9 +145,10 @@ export interface EvidenceBundle {
   premium: PremiumData[];
   /**
    * 판정이 '근거 부족'으로 나온 뒤 한 번 더 찾아본 기록(보강 검색). 찾아보지 않은 묶음에는 없다.
-   * done은 검색을 실제로 했는지, added는 새로 실은 발췌의 수다. 한 묶음에 한 번만 한다
+   * done은 검색을 실제로 했는지, added는 새로 실은 발췌의 수다. 한 묶음에 한 번만 한다.
+   * linked는 앞서 연 기관 사이트의 링크를 따라 열어 본 안쪽 페이지의 수다(이 기능이 생기기 전의 묶음에는 없다)
    */
-  followUp?: { done: boolean; reason: string; added: number };
+  followUp?: { done: boolean; reason: string; added: number; linked?: number };
 }
 
 /** 근거 묶음의 식별값을 만드는 데 들어가는 명제의 항목 */

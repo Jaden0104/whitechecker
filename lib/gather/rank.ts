@@ -23,7 +23,8 @@ export interface Candidate {
   relevance: number;
 }
 
-const UNREADABLE = /\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip|jpe?g|png|gif|mp4|mp3)$/i;
+/** 본문을 읽을 수 없는 형식의 파일 주소 */
+export const UNREADABLE = /\.(pdf|hwp|hwpx|docx?|xlsx?|pptx?|zip|jpe?g|png|gif|mp4|mp3)$/i;
 
 function keyOf(url: URL): string {
   return `${url.hostname.toLowerCase().replace(/^www\./, '')}${url.pathname.replace(/\/$/, '')}${url.search}`;

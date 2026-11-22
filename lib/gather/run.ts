@@ -5,7 +5,7 @@ import { LIMITS } from '../limits.ts';
 import { LinerError, chatJson, searchWeb, type Budget, type SearchHit, type SearchOptions } from '../liner.ts';
 import { decodeBody, safeGet } from '../net/safe-get.ts';
 import { FOLLOW_UP_SYSTEM, MORE_SEARCH_SCHEMA, MORE_SEARCH_SYSTEM, followUpUserMessage, moreSearchUserMessage } from '../prompts/more-search.ts';
-import { STANDARD, hostMatches, requirementMetBeforeJudging } from '../standard.ts';
+import { STANDARD, excludedReason, hostMatches, institutionOf, requirementMetBeforeJudging, siteOf } from '../standard.ts';
 import type {
   Claim,
   Evidence,
@@ -18,8 +18,8 @@ import type {
   Usage,
 } from '../types.ts';
 import { claimKeywords, pickExcerpts, textRelevance, type Keyword } from './excerpts.ts';
-import { extractPageText } from './page-text.ts';
-import { mergeResults, orderCandidates, pickPages, type Candidate } from './rank.ts';
+import { extractLinks, extractPageText } from './page-text.ts';
+import { UNREADABLE, mergeResults, orderCandidates, pickPages, type Candidate } from './rank.ts';
 
 export type GatherClaim = Pick<Claim, 'statement' | 'type' | 'qualifiers' | 'asOf' | 'queries' | 'counterQuery'>;
 
@@ -336,6 +336,77 @@ export async function gatherEvidence(
 
 /** 보강 검색에서 새로 적는 출처 수의 상한 */
 const MAX_FOLLOW_UP_SOURCES = 8;
+/** 링크의 글자가 찾는 낱말과 이만큼은 겹쳐야 안쪽 페이지로 열어 본다(찾는 내용을 가리키는 낱말 하나, 또는 대상의 이름 둘쯤) */
+const MIN_LINK_RELEVANCE = 0.5;
+
+/**
+ * 안쪽 페이지 찾기. 앞서 열어 본 기관 사이트의 페이지에서 링크를 읽어, 찾는 내용이 실릴 만한 페이지(연혁, 관람 안내 등)를 후보로 돌려준다.
+ * 검색은 기관 사이트의 첫 화면까지만 주고 안쪽 페이지는 잘 주지 않는다. 사람이 메뉴를 눌러 들어가듯 한 단계만 따라간다.
+ * 같은 사이트 안의 링크만, 링크에 적힌 글자가 찾는 낱말과 겹치는 것만 고른다. 백과사전이나 논문 사이트에서는 하지 않는다
+ * @param site 보강 검색이 겨냥한 사이트. 있으면 그 사이트의 페이지에서만 링크를 읽는다
+ * @param wanted 보강 검색어에서 뽑은 낱말(찾는 내용이 실릴 페이지의 이름 등). 이 낱말이 적힌 링크를 먼저 고른다
+ * @param knownUrls 이미 찾아 둔 주소. 다시 후보로 내지 않는다
+ */
+async function innerPages(
+  previous: EvidenceBundle,
+  site: string,
+  keywords: Keyword[],
+  wanted: Keyword[],
+  knownUrls: Set<string>,
+  budget: Budget,
+): Promise<Candidate[]> {
+  const reference = STANDARD.domains.provisional.grade2;
+  const from = previous.sources
+    .filter(
+      (s) =>
+        (s.fetch.status === '성공' || s.fetch.status === '관련 내용 없음') &&
+        s.provisionalGrade <= 2 &&
+        !s.lowPlatform &&
+        !reference.some((d) => hostMatches(s.hostname, d)) &&
+        (!site || hostMatches(s.hostname, site)),
+    )
+    .slice(0, LIMITS.followUp.linkSources);
+  // 뒤이어 페이지를 열 시간은 남겨 둔다
+  const timeoutMs = Math.min(LIMITS.followUp.linkTimeoutMs, budget.deadline - Date.now() - 20_000);
+  if (from.length === 0 || timeoutMs < 1500) return [];
+
+  const byUrl = new Map<string, Candidate>();
+  /** 링크의 글자가 보강 검색어의 낱말(예: 연혁)과 겹치는 정도. 명제의 낱말(예: 절 이름)만 겹치는 링크보다 앞에 둔다 */
+  const aimed = new Map<string, number>();
+  await Promise.all(
+    from.map(async (source) => {
+      const got = await safeGet(source.url, { timeoutMs, maxBytes: LIMITS.gather.pageBytes });
+      if (!got.ok) return;
+      const home = siteOf(new URL(got.url).hostname);
+      extractLinks(decodeBody(got.body, got.contentType).text, got.url).forEach((link, order) => {
+        const url = new URL(link.url);
+        if (siteOf(url.hostname) !== home || UNREADABLE.test(url.pathname) || knownUrls.has(url.href) || url.href === got.url) return;
+        if (link.text.length < 2 || link.text.length > 40) return;
+        const relevance = textRelevance(keywords, link.text);
+        if (relevance < MIN_LINK_RELEVANCE || byUrl.has(url.href)) return;
+        aimed.set(url.href, textRelevance(wanted, link.text));
+        const hostname = url.hostname.toLowerCase();
+        byUrl.set(url.href, {
+          url: url.href,
+          title: link.text,
+          hostname,
+          date: null,
+          summary: '',
+          foundBy: ['보강'],
+          bestRank: order,
+          provisionalGrade: source.provisionalGrade,
+          publisherHint: institutionOf(hostname),
+          lowPlatform: false,
+          skip: excludedReason(hostname),
+          relevance,
+        });
+      });
+    }),
+  );
+  return [...byUrl.values()]
+    .filter((c) => !c.skip)
+    .sort((a, b) => (aimed.get(b.url) ?? 0) - (aimed.get(a.url) ?? 0) || b.relevance - a.relevance || a.bestRank - b.bestRank);
+}
 
 /**
  * 보강 검색. 한 차례 판정해 '근거 부족'이 나온 명제에 대해, 모자랐던 근거를 겨냥해 한 번 더 찾는다.
@@ -378,10 +449,14 @@ export async function gatherMore(
   const openedUrls = new Set(previous.sources.filter((s) => s.fetch.status !== '열지 않음').map((s) => s.url));
   const hasExcerpt = new Set(previous.evidence.map((e) => e.sourceNo));
 
-  const followUp = { done: false, reason: '', added: 0 };
+  const followUp = { done: false, reason: '', added: 0, linked: 0 };
   let candidates = known;
   let fresh: Candidate[] = [];
   let wanted = true;
+  /** 보강 검색이 겨냥한 사이트. 정하지 않았으면 빈 문자열 */
+  let targetSite = '';
+  /** 보강 검색어에서 뽑은 낱말. 안쪽 페이지를 고를 때 이 낱말이 적힌 링크를 먼저 본다 */
+  let aimWords: Keyword[] = [];
   try {
     const sites = new Map<string, string>();
     for (const i of STANDARD.domains.institutions) sites.set(i.domain, i.publisher);
@@ -442,10 +517,15 @@ export async function gatherMore(
     const site = [...sites.keys()].find((d) => d === (value.site ?? '').trim().toLowerCase().replace(/^www\./, '')) ?? '';
     const query = site ? `site:${site} ${words}` : words;
     const squeeze = (s: string) => s.replace(/\s+/g, '');
+    targetSite = site;
+    // 보강 검색어의 낱말(찾는 내용이 실릴 페이지의 이름 등)도 발췌와 안쪽 페이지를 고르는 낱말로 쓴다
+    if (wanted && words) {
+      keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery, words].filter(Boolean));
+      aimWords = claimKeywords('', [], [words]);
+    }
     if (wanted && words && !previous.searches.some((s) => squeeze(s.query) === squeeze(query))) {
       const found = await search({ query, kind: '보강', maxResults: LIMITS.gather.maxResults, includeKnowledge: false });
       if (!(found instanceof LinerError)) {
-        keywords = claimKeywords(claim.statement, claim.queries.filter(Boolean), [claim.counterQuery, words].filter(Boolean));
         followUp.done = true;
         const before = new Set(known.map((c) => c.url));
         candidates = mergeResults([found], relevanceOf, known);
@@ -471,7 +551,17 @@ export async function gatherMore(
   };
   if (wanted) {
     const left = () => LIMITS.followUp.pages - good().length;
-    await open(pickPages(fresh, left(), openedUrls, false));
+    // 안쪽 페이지를 먼저 연다. 앞서 연 기관 사이트의 메뉴에서, 찾는 내용을 가리키는 이름이 붙은 링크를 따라간다.
+    // 실패해도(사이트가 응답하지 않는 경우 등) 검색으로 찾은 페이지는 그대로 연다
+    const linked = await innerPages(previous, targetSite, keywords, aimWords, new Set(candidates.map((c) => c.url)), budget).catch(() => []);
+    const before = opened.length;
+    const goodLinks = () => opened.slice(before).filter((p) => p.outcome.status === '성공').length;
+    await open(linked.slice(0, LIMITS.followUp.linkPages));
+    // 따라간 링크가 없는 페이지였거나 찾는 내용이 없었으면, 다음 링크로 한 번만 더 메운다
+    const missing = LIMITS.followUp.linkPages - goodLinks();
+    if (missing > 0) await open(linked.slice(LIMITS.followUp.linkPages, LIMITS.followUp.linkPages + missing));
+    followUp.linked = opened.length - before;
+    if (left() > 0) await open(pickPages(fresh, left(), openedUrls, false));
     // 열지 못했거나 찾는 내용이 없던 자리는 다음 후보로 한 번 메운다
     if (left() > 0) await open(pickPages(fresh, left(), openedUrls, false));
     if (left() > 0) await open(pickPages(known.filter((c) => c.provisionalGrade <= 2), left(), openedUrls, false));

@@ -21,7 +21,16 @@ export const LIMITS = {
     maxResults: 10,
   },
   /** 보강 검색: 판정이 '근거 부족'일 때 모자랐던 근거를 겨냥해 한 번 더 찾는다. 검색 1회, 새로 여는 페이지와 더 싣는 발췌의 상한 */
-  followUp: { pages: 3, attempts: 6, excerptChars: 4000, missingChars: 600 },
+  followUp: {
+    pages: 3,
+    attempts: 8,
+    excerptChars: 4000,
+    missingChars: 600,
+    /** 안쪽 페이지 열기: 앞서 연 기관 사이트의 페이지에서 링크를 읽어 올 곳의 수, 그 가운데 열어 볼 링크의 수, 링크를 읽을 때 기다리는 시간 */
+    linkSources: 2,
+    linkPages: 2,
+    linkTimeoutMs: 8000,
+  },
   judge: { outputTokens: 2000 },
   merge: { outputTokens: 1000 },
   /** 수정안의 다듬기 검사. 문장 하나를 다시 적는 정도다 */

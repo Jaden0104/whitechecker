@@ -248,6 +248,7 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
                 <li>
                   판정이 &lsquo;근거 부족&rsquo;이어서 한 번 더 찾음(보강 검색){bundle.followUp.done ? '' : ', 검색은 하지 않음'}: {bundle.followUp.reason}{' '}
                   {bundle.followUp.added > 0 ? `새로 실은 발췌 ${bundle.followUp.added}개` : '새로 실은 자료 없음'}
+                  {bundle.followUp.linked ? ` · 기관 사이트의 메뉴를 따라 열어 본 안쪽 페이지 ${bundle.followUp.linked}곳` : ''}
                 </li>
               )}
               {opened.map((s) => (
