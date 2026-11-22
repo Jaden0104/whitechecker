@@ -350,6 +350,35 @@ j = run(
 );
 expect('같은 대상의 근거가 있고 한정 표현이 출처와 맞지 않으면 축소안을 둔다', `${j.verdict}/${j.fix.kind}`, '해석 주의/축소안');
 
+console.log('\n[셈이 필요한 명제의 불일치]');
+// 출처 2는 책을 찍은 해와 "78년 앞선다"를 적었고, 출처 10은 두 가지로 읽히는 문장을 적었다(1378년이 입적한 해인지 찍은 해인지)
+const years = {
+  ...bundleOf([]),
+  evidence: [
+    { no: 2, sourceNo: 2, text: '이 책은 1377년에 금속활자로 찍었다. 서양의 첫 활자본보다 78년이나 앞선 것이다.' },
+    { no: 10, sourceNo: 10, text: '1378년 스님이 입적한 절에서 목판으로 찍은 책이다. 금속활자본은 1377년에 찍었다.' },
+  ],
+};
+const relativeCase = (statement, evidence, fix) =>
+  applyRules({ claim: { statement, type: '연대·인명·기관명', lead: false }, bundle: years, model: model('불일치', evidence, { fix }), sentenceKey: 'k' });
+j = relativeCase('이 책은 서양의 첫 활자본보다 87년 앞선다', [ev(2, '반박', '78년이나 앞선 것이다')], { kind: '교정안', instruction: '87년을 78년으로 고친다', source_no: 0 });
+expect('출처가 다른 값을 직접 적었으면 불일치와 교정안을 둔다(78년)', `${j.verdict}/${j.fix.kind}`, '불일치/교정안');
+j = relativeCase('금속활자본은 스님이 세상을 떠난 지 3년 뒤에 나왔다', [ev(10, '반박', '금속활자본은 1377년에 찍었다')], {
+  kind: '교정안',
+  instruction: "'세상을 떠난 지 3년 뒤'를 '세상을 떠나기 1년 전'으로 고친다",
+  source_no: 0,
+});
+expect('모델이 셈해서 얻은 값(1년)은 출처에 없으므로 불일치로 받지 않는다', `${j.verdict}/${j.lowered?.rule}/${j.fix.kind}`, '근거 부족/5번/없음');
+expect('  바꾼 까닭에 셈이 필요한 명제라고 적는다', j.lowered?.note.includes('셈을 해야 하는 명제'), true);
+j = relativeCase('금속활자본은 스님이 세상을 떠난 지 3년 뒤에 나왔다', [ev(10, '반박', '금속활자본은 1377년에 찍었다')], { kind: '없음', instruction: '', source_no: 0 });
+expect('교정안이 없는 불일치도 셈이 필요한 명제면 받지 않는다', j.verdict, '근거 부족');
+j = relativeCase('이 책은 1387년에 금속활자로 찍었다', [ev(2, '반박', '이 책은 1377년에 금속활자로 찍었다')], { kind: '교정안', instruction: '1387년을 1377년으로 고친다', source_no: 0 });
+expect('연도를 그대로 적은 명제는 셈이 필요한 명제가 아니다(전과 같이 불일치)', `${j.verdict}/${j.fix.kind}`, '불일치/교정안');
+j = relativeCase('전시는 1996년 전라북도에서 열렸다', [ev(2, '반박', '이 책은 1377년에 금속활자로 찍었다')], { kind: '교정안', instruction: '1996년을 1997년으로 고친다', source_no: 0 });
+expect("  '1996년 전라북도'의 '전'은 셈하는 말로 보지 않는다", j.verdict, '불일치');
+j = relativeCase('관람객이 지난해의 2배로 늘었다', [ev(2, '반박', '78년이나 앞선 것이다')], { kind: '교정안', instruction: '2배를 3배로 고친다', source_no: 0 });
+expect('배수도 바꿔 넣을 값이 출처에 그대로 있어야 한다', j.verdict, '근거 부족');
+
 console.log('\n[인용문의 근거 번호 바로잡기]');
 // 같은 출처(1번)의 발췌가 둘이다: 근거 1은 크기, 근거 7은 관람 시간
 const twoExcerpts = {

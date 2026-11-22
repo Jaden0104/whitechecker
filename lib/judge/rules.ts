@@ -11,6 +11,7 @@ import {
   isDocType,
   notEvidenceDocType,
   samePublisherName,
+  siteOf,
   type RequirementOption,
 } from '../standard.ts';
 import type {
@@ -49,6 +50,21 @@ export const CITE_INSTRUCTION = '이 출처의 설명임을 밝혀 쓴다';
 /** 글자와 숫자만 남기고 견줘 이만큼 이어서 같으면, 한쪽이 다른 쪽을 옮겼거나 둘이 같은 글을 옮긴 것으로 본다 */
 const COPIED_RUN = 40;
 
+/**
+ * 셈을 해야 맞는지 알 수 있는 표현: 두 시점의 차이(3년 뒤, 87년 앞선다, 10년 만에)와 배수(2배).
+ * 네 자리 수 뒤의 '년'은 연도이므로 치지 않는다. '전라북도'의 '전'처럼 다른 낱말의 첫 글자는 걸리지 않게 한다
+ */
+const RELATIVE =
+  /(?<!\d)\d{1,3}\s*(여\s*)?(년|개월|달|주|일|시간|세기)\s*(이나\s*|가량\s*|쯤\s*|남짓\s*)?((뒤|후|전)(?![가-힣])|(뒤|후|전)(?=에|의|인|부터|까지|쯤|이[며고다]|입니다)|만에|앞(서|선|섭|당|지)|먼저|늦[게은었]|빠[르른]|빨리|이른)|(?<![\d.])\d+(\.\d+)?\s*배/;
+
+/** 글에 적힌 '수와 단위'(78년, 2배 등). 쉼표와 '여'는 빼고 견준다. 예: "70여 년" → 70년 */
+function amountsIn(text: string): Set<string> {
+  const out = new Set<string>();
+  const plain = text.replace(/(\d),(?=\d{3})/g, '$1');
+  for (const m of plain.matchAll(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:여\s*)?(년|개월|달|주|일|시간|세기|배)/g)) out.add(`${m[1]}${m[2]}`);
+  return out;
+}
+
 const lettersOnly = (text: string) =>
   text
     .normalize('NFKC')
@@ -78,17 +94,6 @@ export function squeezeQuote(text: string): string {
     .replace(/[\s|]+/g, '')
     .replace(/[“”„‟]/g, '"')
     .replace(/[‘’‚‛]/g, "'");
-}
-
-/** 같은 사이트인지 견줄 때 쓰는 이름. 예: www.gogung.go.kr과 m.gogung.go.kr은 gogung.go.kr */
-function siteOf(hostname: string): string {
-  const parts = hostname
-    .toLowerCase()
-    .replace(/^(www|m)\./, '')
-    .split('.');
-  const country = parts[parts.length - 1]?.length === 2;
-  const second = ['go', 'or', 'ac', 'co', 're', 'ne', 'pe', 'com', 'org', 'gov', 'edu'].includes(parts[parts.length - 2] ?? '');
-  return parts.slice(country && second ? -3 : -2).join('.');
 }
 
 const pick = <T extends string>(value: unknown, allowed: T[], fallback: T): T =>
@@ -262,6 +267,20 @@ export function applyRules(input: RuleInput): Judgment {
     return byPublishers ? '서로 다른 곳' : null;
   };
 
+  // 셈이 필요한 명제(몇 년 뒤, 몇 배)는 모델이 값 하나를 잘못 읽으면 맞는 문장을 틀렸다고 하고 엉뚱한 값으로 고치라고 한다.
+  // 그래서 이런 명제의 '불일치'와 교정안은, 바꿔 넣을 값(수와 단위)이 반박 근거의 발췌에 그대로 적혀 있을 때만 받는다.
+  // 출처가 "78년 앞선다"처럼 다른 값을 직접 적었을 때다. 모델이 두 연도를 빼서 얻은 값은 받지 않는다
+  const relative = RELATIVE.test(claim.statement);
+  const modelFix = { kind: pick(model.fix?.kind, FIX_KINDS, '없음'), instruction: short(model.fix?.instruction, 200) };
+  const groundedCorrection = (): boolean => {
+    if (modelFix.kind !== '교정안') return false;
+    const given = amountsIn(claim.statement);
+    const added = [...amountsIn(modelFix.instruction)].filter((amount) => !given.has(amount));
+    if (added.length === 0) return false;
+    const stated = new Set(refute.flatMap((no) => textsOf(no)).flatMap((text) => [...amountsIn(text)]));
+    return added.every((amount) => stated.has(amount));
+  };
+
   type Decision = { verdict: ModelVerdict; rule?: string; note?: string };
   const decide = (): Decision => {
     if (support.length > 0 && refute.length > 0) {
@@ -298,6 +317,9 @@ export function applyRules(input: RuleInput): Judgment {
       if (top(refute) === 3) {
         flags.push('3등급 자료가 다른 내용을 적고 있다');
         return { verdict: '근거 부족', rule: '2번', note: '반박 근거가 3등급뿐이다' };
+      }
+      if (relative && !groundedCorrection()) {
+        return { verdict: '근거 부족', rule: '5번', note: '셈을 해야 하는 명제인데, 원고와 다른 값을 직접 적은 근거가 없다(바꿔 넣을 값이 반박 근거의 발췌에 그대로 있어야 한다)' };
       }
       return { verdict: '불일치' };
     }
@@ -369,7 +391,14 @@ export function applyRules(input: RuleInput): Judgment {
     if (chosen !== undefined) {
       // 모델이 고른 출처가 원고와 같은 내용을 적고 있으면 그 이름을 밝힌다
       fix = citing(chosen);
-    } else if (fromRefute !== undefined && conflict.supportTop === 3 && fix.kind === '교정안' && fix.instruction && added.every((n) => numbersOfSource(fromRefute).has(n))) {
+    } else if (
+      fromRefute !== undefined &&
+      conflict.supportTop === 3 &&
+      fix.kind === '교정안' &&
+      fix.instruction &&
+      added.every((n) => numbersOfSource(fromRefute).has(n)) &&
+      (!relative || groundedCorrection())
+    ) {
       // 모델은 틀렸다고 봤는데 3등급 자료의 지지가 섞여 '해석 주의'가 된 경우다. 원고와 다르게 적은 2등급 이상 출처의 내용으로 바꾸고 그 이름을 밝힌다.
       // 지지 쪽에도 2등급 이상 출처가 있으면 이렇게 하지 않는다. 믿을 만한 출처끼리 엇갈릴 때 한쪽 값으로 바꾸면 맞는 원고를 틀리게 고칠 수 있다.
       // 바꿔 넣을 수가 그 출처의 발췌에 있어야 한다. 반박 출처가 여럿이고 값이 서로 다를 수 있기 때문이다.

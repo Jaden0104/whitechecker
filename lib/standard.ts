@@ -66,6 +66,17 @@ export function hostMatches(hostname: string, domain: string): boolean {
   return h === domain || h.endsWith(`.${domain}`);
 }
 
+/** 같은 사이트인지 견줄 때 쓰는 이름. 예: www.gogung.go.kr과 m.gogung.go.kr은 gogung.go.kr */
+export function siteOf(hostname: string): string {
+  const parts = hostname
+    .toLowerCase()
+    .replace(/^(www|m)\./, '')
+    .split('.');
+  const country = parts[parts.length - 1]?.length === 2;
+  const second = ['go', 'or', 'ac', 'co', 're', 'ne', 'pe', 'com', 'org', 'gov', 'edu'].includes(parts[parts.length - 2] ?? '');
+  return parts.slice(country && second ? -3 : -2).join('.');
+}
+
 /** 기관 도메인 목록에서 찾은 기관 이름. 없으면 빈 문자열 */
 export function institutionOf(hostname: string): string {
   return STANDARD.domains.institutions.find((i) => hostMatches(hostname, i.domain))?.publisher ?? '';
