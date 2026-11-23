@@ -1,4 +1,4 @@
-// 판정의 코드 규칙(PRD 5.3절)이 기대대로 동작하는지 확인한다. Liner를 부르지 않는다.
+// 판정의 코드 규칙(PRD 4.3절)이 기대대로 동작하는지 확인한다. Liner를 부르지 않는다.
 // 모델이 이렇게 답했다고 치고, 코드가 판정을 어떻게 확정하는지를 본다.
 // 사용: node tools/check_rules.mjs
 import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '../lib/flags.ts';

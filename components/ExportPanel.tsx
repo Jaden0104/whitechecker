@@ -1,4 +1,4 @@
-// 내보내기(F11, 9장): 채택한 문장만 바꾼 수정 원고와, 무엇을 왜 고쳤는지 적은 검토 기록을 내려받는다.
+// 내보내기(F11, 8장): 채택한 문장만 바꾼 수정 원고와, 무엇을 왜 고쳤는지 적은 검토 기록을 내려받는다.
 // 파일은 이 브라우저에서 만들고 서버에 남기지 않는다. 내려받기 전에 남는 것(채택하지 않은 수정안, 미해결, 직접 확인)을 함께 보인다.
 import { useMemo, type ReactNode } from 'react';
 import { fileBase, planExport, reviewRecordJson, reviewRecordMarkdown } from '@/lib/client/export';

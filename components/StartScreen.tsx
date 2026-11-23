@@ -1,4 +1,4 @@
-// 시작 화면(PRD 9장 1번): 접속 코드, 원고 붙여넣기와 파일 올리기, 가상 원고, 고지 네 가지.
+// 시작 화면(PRD 8장 1번): 접속 코드, 원고 붙여넣기와 파일 올리기, 가상 원고, 고지 네 가지.
 import { useRef } from 'react';
 
 export interface Sample {

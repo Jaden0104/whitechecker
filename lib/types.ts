@@ -229,7 +229,7 @@ export interface Judgment {
   verdict: Verdict;
   /** 모델이 낸 판정. 코드가 바꾸지 않았으면 verdict와 같다 */
   modelVerdict: Verdict;
-  /** 코드가 판정을 바꿨으면 어느 규칙(5.3절의 번호)으로 왜 바꿨는지 */
+  /** 코드가 판정을 바꿨으면 어느 규칙(4.3절의 번호)으로 왜 바꿨는지 */
   lowered: { rule: string; note: string } | null;
   reason: string;
   /** 권고 조치 */

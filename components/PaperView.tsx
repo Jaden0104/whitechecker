@@ -1,4 +1,4 @@
-// 원고 보기(F2의 명제 추출 범위 표시, 9장): 원고를 문장 단위로 보이고, 문장마다 가장 급한 판정과 뽑힌 명제 수를 표시한다.
+// 원고 보기(F2의 명제 추출 범위 표시, 8장): 원고를 문장 단위로 보이고, 문장마다 가장 급한 판정과 뽑힌 명제 수를 표시한다.
 // 명제가 하나도 뽑히지 않은 문장이 눈에 띄게 해, 빠진 검증 대상이 없는지 살피게 한다. 채택한 문장은 바뀐 대목을 함께 보인다.
 import type { KeyboardEvent } from 'react';
 import { candidateText, compareByRank, isAdopted, reviewOf, viewOf, type RunState } from '@/lib/run/model';

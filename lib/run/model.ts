@@ -1,4 +1,4 @@
-// 화면이 맡는 진행(PRD 7장 '화면이 진행을 맡는다')의 자료 모양과, 그 자료를 읽는 함수들.
+// 화면이 맡는 진행(PRD 6장 '화면이 진행을 맡는다')의 자료 모양과, 그 자료를 읽는 함수들.
 // 처리 상태, 사실 판정, 실패 사유를 따로 둔다(F16). 처리에 실패한 것을 '근거 부족'으로 보이지 않기 위해서다.
 import { citedSourceName, type SentenceClaim } from '../merge/plan.ts';
 import type { Claim, ClaimType, EvidenceBundle, Judgment, Priority, Sentence, SentenceRevision, Usage, Verdict } from '../types.ts';
@@ -269,7 +269,7 @@ const VERDICT_ORDER: Record<Verdict, number> = { 불일치: 0, '근거 부족': 
 /**
  * 보이는 순서(F8). 틀린 것으로 확인된 것(불일치)을 먼저 보인다. 자리와 상관없이 반드시 고쳐야 하기 때문이다.
  * 그 안에서, 그리고 나머지(근거 부족, 해석 주의)에서는 편집 우선순위가 높은 것부터 보인다. 끝나지 않은 것은 맨 뒤다.
- * 편집 우선순위(상·중·하)는 판정과 따로 매기는 값으로, 틀렸을 때 글에 미치는 영향을 뜻한다(5.4절).
+ * 편집 우선순위(상·중·하)는 판정과 따로 매기는 값으로, 틀렸을 때 글에 미치는 영향을 뜻한다(4.4절).
  */
 export function compareByRank(a: ClaimView, b: ClaimView): number {
   const rank = (v: ClaimView) => [v.verdict === '불일치' ? 0 : 1, PRIORITY_ORDER[v.judgment?.priority ?? ''] ?? 3, v.verdict ? VERDICT_ORDER[v.verdict] : 5];

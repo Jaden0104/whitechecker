@@ -169,7 +169,7 @@ export const JUDGE_SCHEMA = {
   },
 } as const;
 
-/** 모델이 돌려주는 판정의 모양. 코드가 5.3절의 규칙으로 다시 검사한다 */
+/** 모델이 돌려주는 판정의 모양. 코드가 4.3절의 규칙으로 다시 검사한다 */
 export interface ModelJudgment {
   sources: Array<{ source_no: number; doc_type: string; publisher: string; own_fact: boolean }>;
   links: Array<{ a: number; b: number; status: string; reason: string }>;
