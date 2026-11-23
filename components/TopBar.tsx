@@ -57,7 +57,8 @@ export function TopBar({ run, onStop, onResume, onHome, onClear, onExport, expor
   const elapsed = run.activeMs + (run.passStartedAt !== null ? Math.max(0, now - run.passStartedAt) : 0);
   const chunksDone = run.chunks.filter((c) => c.state === '완료').length;
   const left = counts.total - counts.done;
-  const scope = `뽑은 ${counts.total}개 중 ${counts.done}개 처리${left > 0 ? `, ${left}개 미완료` : ''}`;
+  // 도는 동안의 "명제 N개 가운데 M개 끝남"과 같은 말을 쓴다. 무엇이 N개인지 알 수 있게
+  const scope = `명제 ${counts.total}개 중 ${counts.done}개 처리${left > 0 ? `, ${left}개 미완료` : ''}`;
 
   let headline: string;
   let detail: string;
@@ -71,7 +72,9 @@ export function TopBar({ run, onStop, onResume, onHome, onClear, onExport, expor
     detail = `명제 ${counts.total}개 가운데 ${counts.done}개 끝남`;
     ratio = counts.total ? counts.done / counts.total : 0;
   } else {
-    headline = run.status === '끝남' ? '검증 끝남' : '멈춤';
+    // 끝나지 않은 항목이 남아 있으면 끝까지 돌았더라도 '검증 완료'라고 적지 않는다. 아래 알림 줄과 어긋나기 때문이다.
+    // '일시 중단'은 '이어서 실행'으로 마저 할 수 있다는 뜻이다
+    headline = run.status === '끝남' && !hasUnfinished(run) ? '검증 완료' : '일시 중단';
     detail = scope;
   }
   const usageLine = running
