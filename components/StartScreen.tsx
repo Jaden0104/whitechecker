@@ -110,6 +110,8 @@ export function StartScreen({ code, onCode, draft, onDraft, samples, error, onEr
               {draft.length.toLocaleString()}자 / {MAX_CHARS.toLocaleString()}자
             </span>
           </div>
+          {/* 가상 원고가 어떤 글인지 알려 둔다. 처음 써 보는 사람이 오류가 왜 나오는지 알 수 있게 */}
+          {samples.length > 0 && <p className="under-note">가상 원고는 일부러 틀린 문장을 넣어 둔 시험용 글입니다.</p>}
         </div>
 
         <div className="notice">
@@ -131,6 +133,8 @@ export function StartScreen({ code, onCode, draft, onDraft, samples, error, onEr
               앞서 한 검증 결과 보기
             </button>
           )}
+          {/* 얼마나 기다리는지의 어림. 시연 원고(555자)가 1분쯤, 개발용 원고(1,760자)가 3분 30초~4분 걸렸다(2026-11-22) */}
+          <span>원고 1,000자에 2분쯤 걸립니다. 끝난 문장부터 판정표에 나타납니다.</span>
         </div>
       </div>
     </div>
