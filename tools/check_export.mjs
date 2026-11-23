@@ -125,7 +125,7 @@ expect('검토 기록에는 고쳐 쓴 문장을 다시 검증한 결과를 근�
   checkedMd.includes('  1. [일치] 각석의 크기는 세로 211cm쯤입니다.\n     - 유형: 기타, 기준 시점: 현재\n     - 까닭: 사유\n     - 근거 1(지지): "발췌"\n       출처 1: 어느 기관, 1등급, 기관의 공식 안내, https://www.example.go.kr/a\n     - 확인일: 2026-11-21'),
 ], [true, true]);
 const checkedJson = JSON.parse(JSON.stringify(reviewRecordJson(store2.get(), plan, '2026-11-21 19:00')))['문장별 기록'].find((s) => s['문장 번호'] === 2).재검증;
-expect('  JSON 기록에도 같은 내용을 담는다', [checkedJson.대상, checkedJson['이전 문장에 대한 결과'], checkedJson.결과[0].판정, checkedJson.결과[0].근거[0].출처.주소], ['고쳐 쓴 문장', false, '일치', 'https://www.example.go.kr/a']);
+expect('  JSON 기록에도 같은 내용을 담는다', [checkedJson.대상, checkedJson['앞서 쓴 글의 결과'], checkedJson.결과[0].판정, checkedJson.결과[0].근거[0].출처.주소], ['고쳐 쓴 문장', false, '일치', 'https://www.example.go.kr/a']);
 // 원문도 다시 검증하던 때에 저장된 기록은 검토 기록에 적지 않는다(원문에는 처음 검증의 판정 하나만 둔다)
 const legacy = { ...base, rechecks: { 3: { token: 't', text: sentenceText(3), target: 'original', state: '완료', failure: '', claims: [], at: '2026-11-21T00:00:00.000Z' } } };
 const legacyPlan = planExport(legacy);

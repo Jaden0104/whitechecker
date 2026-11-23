@@ -412,7 +412,7 @@ console.log('\n[채택, 고쳐 쓰기, 보류]');
   expect('고쳐 쓴 문장을 다시 검증해 모두 일치면 풀린 것으로 본다', [isResolved(store.get(), viewAt('s3-c1')), isResolved(store.get(), viewAt('s3-c2'))], [true, true]);
   act(3, { kind: 'save', text: '크기는 세로 211cm, 가로 124cm입니다.' });
   run = store.get();
-  expect('그 뒤에 문장을 다시 고치면 앞선 결과는 이전 문장에 대한 결과가 된다', [recheckStatus(run, run.sentences[2]), isResolved(run, viewAt('s3-c2'))], ['이전 문장에 대한 결과', false]);
+  expect('그 뒤에 문장을 다시 고치면 앞선 결과는 앞서 쓴 글의 결과가 된다', [recheckStatus(run, run.sentences[2]), isResolved(run, viewAt('s3-c2'))], ['앞서 쓴 글의 결과', false]);
   expect('  글이 달라졌으므로 다시 검증할 수 있다', canRecheck(run, 3), true);
   act(3, { kind: 'revert' });
   expect('고쳐 쓴 글을 버리면 그 재검증 결과도 치운다', [store.get().rechecks[3], candidateText(store.get(), 3)], [undefined, '크기는 세로 211cm, 가로 223cm입니다.']);

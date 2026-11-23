@@ -181,6 +181,14 @@ export function quoteContext(excerpt: string, quote: string, around = 70): { bef
   };
 }
 
+/** 앞말에 붙일 '로'나 '으로'를 고른다. 받침이 없거나 ㄹ받침이면 '로'다(예: '일치'로, '근거 부족'으로) */
+export function roParticle(word: string): string {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (Number.isNaN(code) || code < 0 || code > 11171) return '로';
+  const final = code % 28;
+  return final === 0 || final === 8 ? '로' : '으로';
+}
+
 /** 걸린 시간을 '1분 12초'처럼 적는다 */
 export function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));

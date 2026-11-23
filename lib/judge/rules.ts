@@ -446,7 +446,7 @@ export function applyRules(input: RuleInput): Judgment {
   }
 
   const used = new Set([...support, ...refute]);
-  if (sources.some((s) => s.publisherUnlisted && used.has(s.sourceNo))) flags.push('발행 주체 확인 필요');
+  if (sources.some((s) => s.publisherUnlisted && used.has(s.sourceNo))) flags.push('출처 기관 확인 필요');
 
   return {
     verdict,

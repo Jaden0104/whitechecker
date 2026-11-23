@@ -241,7 +241,7 @@ export function reviewRecordMarkdown(run: RunState, plan: ExportPlan, exportedAt
     const recheck = recheckOf(run, sentence.id);
     if (recheck && recheck.state === '완료') {
       const stale = recheck.text !== review.edited;
-      lines.push(`- 고쳐 쓴 문장을 다시 검증한 결과(${recheck.at.slice(0, 10)})${stale ? ' — 이전 문장에 대한 결과' : ''}`);
+      lines.push(`- 고쳐 쓴 문장을 다시 검증한 결과(${recheck.at.slice(0, 10)})${stale ? ' — 앞서 쓴 글의 결과' : ''}`);
       if (stale) lines.push(`  - 검증한 글: ${recheck.text}`);
       if (recheck.claims.length === 0) lines.push('  - 확인할 사실을 찾지 못했습니다.');
       recheck.claims.forEach((e, i) => lines.push(...factLines(viewOf(run, e), i, '')));
@@ -314,7 +314,7 @@ export function reviewRecordJson(run: RunState, plan: ExportPlan, exportedAt: st
                 대상: '고쳐 쓴 문장',
                 '검증한 글': recheck.text,
                 '검증한 때': recheck.at,
-                '이전 문장에 대한 결과': recheck.text !== review.edited,
+                '앞서 쓴 글의 결과': recheck.text !== review.edited,
                 결과: recheck.claims.map((e) => claimRecord(viewOf(run, e))),
               }
             : null,

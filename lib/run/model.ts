@@ -63,7 +63,7 @@ export interface ReviewEntry {
   at: string;
 }
 
-/** 고쳐 쓴 문장 하나를 다시 검증한 결과(F14). 요청할 때의 글에 묶는다. 그 뒤에 글이 바뀌면 이전 문장에 대한 결과가 된다 */
+/** 고쳐 쓴 문장 하나를 다시 검증한 결과(F14). 요청할 때의 글에 묶는다. 그 뒤에 글이 바뀌면 앞서 쓴 글의 결과가 된다 */
 export interface RecheckEntry {
   /** 요청 번호. 늦게 도착한 앞선 요청의 응답이 지금의 결과를 덮어쓰지 않게 한다 */
   token: string;
@@ -393,7 +393,7 @@ export function canRecheck(run: RunState, sentenceId: number): boolean {
   return !(entry.state === '완료' && entry.claims.every((e) => e.state === '완료'));
 }
 
-export type RecheckStatus = '미검증' | '검증 중' | '현재 문장 검증 완료' | '이전 문장에 대한 결과';
+export type RecheckStatus = '미검증' | '검증 중' | '현재 문장 검증 완료' | '앞서 쓴 글의 결과';
 
 /** 재검증 상태(F14). 고쳐 쓰지 않은 문장에는 재검증 상태가 없다(null) */
 export function recheckStatus(run: RunState, sentence: Sentence): RecheckStatus | null {
@@ -401,7 +401,7 @@ export function recheckStatus(run: RunState, sentence: Sentence): RecheckStatus 
   if (edited === null) return null;
   const entry = recheckOf(run, sentence.id);
   if (entry?.state === '진행 중') return '검증 중';
-  if (entry?.state === '완료') return entry.text === edited ? '현재 문장 검증 완료' : '이전 문장에 대한 결과';
+  if (entry?.state === '완료') return entry.text === edited ? '현재 문장 검증 완료' : '앞서 쓴 글의 결과';
   return '미검증';
 }
 

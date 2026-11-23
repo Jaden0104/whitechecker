@@ -34,7 +34,7 @@ function Row({ run, row, current, onSelect }: { run: RunState; row: SentenceRow;
   const done = views.filter((v) => v.state === '완료' && v.verdict !== null);
   const kinds = [...new Set(done.map((v) => v.judgment?.fix.kind).filter((k): k is NonNullable<typeof k> => Boolean(k) && k !== '없음'))];
   const types = [...new Set(views.map((v) => v.entry.claim.type))];
-  const flags = [...new Set(done.flatMap((v) => [v.judgment?.needChoice ? '선택 필요' : '', ...(v.judgment?.flags ?? [])]).filter(Boolean))];
+  const flags = [...new Set(done.flatMap((v) => [v.judgment?.needChoice ? '수정 방향 선택 필요' : '', ...(v.judgment?.flags ?? [])]).filter(Boolean))];
   // 처리가 끝나지 않은 명제는 판정처럼 보이지 않게 상태로 따로 적는다. 돌고 있는 것, 실패한 것 순으로 하나만 보인다
   const waiting = pending.find((v) => v.state === '진행 중') ?? pending.find((v) => v.state === '실패') ?? pending[0];
   const meta = [

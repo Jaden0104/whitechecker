@@ -115,11 +115,11 @@ for (const row of rows) {
   if (j.lowered) changed += 1;
   const moved = j.lowered ? ` ← 모델은 '${j.modelVerdict}', ${j.lowered.rule} 규칙: ${j.lowered.note}` : '';
   console.log(`   판정: ${j.verdict}${moved}`);
-  console.log(`   우선순위 ${j.priority ?? '-'}${j.needChoice ? ', 선택 필요' : ''}${j.flags.length ? ` | 표시: ${j.flags.join(', ')}` : ''} | ${r.seconds.toFixed(1)}초`);
+  console.log(`   우선순위 ${j.priority ?? '-'}${j.needChoice ? ', 수정 방향 선택 필요' : ''}${j.flags.length ? ` | 표시: ${j.flags.join(', ')}` : ''} | ${r.seconds.toFixed(1)}초`);
   console.log(`   까닭: ${j.reason}`);
   for (const s of j.sources) {
     const info = row.bundle.sources.find((x) => x.no === s.sourceNo);
-    console.log(`   출처${s.sourceNo} ${s.grade}등급 | ${s.docType}${s.ownFact ? '(직접 정하는 사실)' : ''} | ${s.publisher || '-'} | ${info?.hostname ?? ''}`);
+    console.log(`   출처${s.sourceNo} ${s.grade}등급 | ${s.docType}${s.ownFact ? '(담당 기관 자료)' : ''} | ${s.publisher || '-'} | ${info?.hostname ?? ''}`);
   }
   for (const l of j.links) console.log(`   출처${l.a}·${l.b}: ${l.status} (${l.reason})`);
   for (const e of j.evidence) {

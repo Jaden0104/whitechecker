@@ -34,17 +34,18 @@ interface Props {
   onRecheck: (sentenceId: number) => void;
 }
 
-const STATUS_CLASS: Record<RecheckStatus, string> = { 미검증: '', '검증 중': 'busy', '현재 문장 검증 완료': 'done', '이전 문장에 대한 결과': 'stale' };
+const STATUS_CLASS: Record<RecheckStatus, string> = { 미검증: '', '검증 중': 'busy', '현재 문장 검증 완료': 'done', '앞서 쓴 글의 결과': 'stale' };
 const STATUS_LABEL: Record<RecheckStatus, string> = {
   미검증: '아직 검증하지 않음',
   '검증 중': '검증 중',
   '현재 문장 검증 완료': '현재 문장 검증 완료',
-  '이전 문장에 대한 결과': '이전 문장에 대한 결과',
+  // '이전 문장'이라고 적으면 문장 번호 옆에서 원고의 앞 문장으로 읽힌다. 아래 상자의 제목('앞서 고쳐 쓴 글을 검증한 결과')과 같은 말로 적는다
+  '앞서 쓴 글의 결과': '앞서 쓴 글의 결과',
 };
 
 /**
  * 고쳐 쓴 글을 다시 검증한 결과. 요청할 때의 글에 묶여 있어, 그 뒤에 글을 또 고치면 앞서 고쳐 쓴 글에 대한 결과로 보인다.
- * 재검증 상태(검증 중, 현재 문장 검증 완료, 이전 문장에 대한 결과)는 카드 머리에 한 번만 적는다
+ * 재검증 상태(검증 중, 현재 문장 검증 완료, 앞서 쓴 글의 결과)는 카드 머리에 한 번만 적는다
  */
 function RecheckBlock({ run, sentence }: { run: RunState; sentence: Sentence }) {
   const entry = recheckOf(run, sentence.id);

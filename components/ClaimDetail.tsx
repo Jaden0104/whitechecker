@@ -1,5 +1,6 @@
 // 항목의 상세(F8): 문장과 수정안, 판정의 까닭, 근거와 인용문, 출처와 등급, 검색 기록.
 import { Fragment } from 'react';
+import { roParticle } from '@/lib/client/text';
 import { SINGLE_REFUTER_FLAG, TWO_PUBLISHERS_FLAG } from '@/lib/flags';
 import type { ClaimView, RunState } from '@/lib/run/model';
 import type { ReviewAction } from '@/lib/run/review';
@@ -137,9 +138,9 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
             ))}
             {judgment.lowered && (
               <>
-                <dt>바꾼 까닭</dt>
+                <dt>판정 조정</dt>
                 <dd>
-                  모델은 &lsquo;{judgment.modelVerdict}&rsquo;로 봤지만 규칙 {judgment.lowered.rule}에 따라 바꿨습니다. {judgment.lowered.note}
+                  {`모델은 ‘${judgment.modelVerdict}’${roParticle(judgment.modelVerdict)} 봤지만 검사 규칙에 따라 ‘${judgment.verdict}’${roParticle(judgment.verdict)} 바꿨습니다. ${judgment.lowered.note}`}
                 </dd>
               </>
             )}
@@ -158,7 +159,7 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
               <>
                 <dt>주의 사항</dt>
                 <dd>
-                  {[judgment.needChoice ? '선택 필요' : '', ...judgment.flags].filter(Boolean).join(' · ')}
+                  {[judgment.needChoice ? '수정 방향 선택 필요' : '', ...judgment.flags].filter(Boolean).join(' · ')}
                   {judgment.flags.includes(TWO_PUBLISHERS_FLAG) && (
                     <small> (서로 다른 기관 두 곳이 같은 내용을 적어 일치로 봤습니다. 두 글이 같은 자료를 보고 쓴 것인지까지는 확인하지 못했습니다.)</small>
                   )}
@@ -215,9 +216,9 @@ export function ClaimDetail({ run, view, running, onBack, onSelect, onReview, on
                     <span>
                       · {s.docType}
                       {s.notUsed ? ` · 판정에 쓰지 않음${s.notUsed !== s.docType ? `(${s.notUsed})` : ''}` : ''}
-                      {s.ownFact ? ' · 직접 정하는 사실' : ''}
+                      {s.ownFact ? ' · 담당 기관 자료' : ''}
                       {twinNo ? ` · 출처 ${twinNo}와 같은 자료로 봄` : ''}
-                      {s.publisherUnlisted ? ' · 발행 주체 확인 필요' : ''}
+                      {s.publisherUnlisted ? ' · 출처 기관 확인 필요' : ''}
                     </span>
                   </div>
                   {info && (

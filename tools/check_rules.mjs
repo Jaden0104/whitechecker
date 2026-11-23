@@ -344,7 +344,7 @@ j = run('운영 정보', '박물관은 09:30부터 문을 연다', {
   ...model('일치', [ev(4, '지지', '오전 10시부터 오후 6시까지')]),
   sources: [{ source_no: 4, doc_type: '기관의 공식 안내', publisher: '어느 박물관', own_fact: true }],
 });
-expect('목록에 없는 곳을 1등급으로 보면 발행 주체 확인 표시', `${j.verdict}/${j.flags.join()}`, '일치/발행 주체 확인 필요');
+expect('목록에 없는 곳을 1등급으로 보면 출처 기관 확인 표시', `${j.verdict}/${j.flags.join()}`, '일치/출처 기관 확인 필요');
 j = run('운영 정보', '박물관은 09:30부터 문을 연다', {
   ...model('일치', [ev(3, '지지', '세로 311cm라고 한다')]),
   sources: [{ source_no: 3, doc_type: '기관의 공식 안내', publisher: '국립고궁박물관', own_fact: true }],
